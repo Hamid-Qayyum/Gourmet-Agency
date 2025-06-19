@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Sales{% endblock %}
+
+{% block page_title %}Sale Processing{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <style>
+        
+        .sale-form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .sale-form-grid .form-control { /* DaisyUI class */
+            margin-bottom: 0; /* Remove default bottom margin if form-control has it */
+        }
+        .modal { z-index: 1050; } /* Ensure modal is on top */
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+
+    <!-- Button to trigger the "Make Sale" modal -->
+    <div class="mb-6 text-center">
+        <label for="make_sale_modal_checkbox" class="btn btn-lg btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            Make a New Sale
+        </label>
+    </div>
+
+    <!-- "Make Sale" Modal -->
+    <input type="checkbox" id="make_sale_modal_checkbox" class="modal-toggle" {% if form_had_errors_for_sale_modal %}checked{% endif %} />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="makeSaleModal">
+        <div class="modal-box w-11/12 max-w-3xl"> {# Wider modal #}
+            <form id="makeSaleModalForm" method="post" action="{% url 'stock:sales' %}">
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-6 text-base-content">Record New Sale</h3>
+
+                {# Display general form errors (non_field_errors) #}
+                {% if sale_form.non_field_errors and form_had_errors_for_sale_modal %}
+                    <div role="alert" class="alert alert-error text-sm p-3 mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <div>
+                            {% for error in sale_form.non_field_errors %}
+                                {{ error }}<br>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="sale-form-grid">
+                    {# Product Batch Selection - Takes full width on medium screens #}
+                    <div class="form-control w-full md:col-span-2">
+                        <label class="label" for="{{ sale_form.product_detail_batch.id_for_label }}">
+                            <span class="label-text font-medium">{{ sale_form.product_detail_batch.label }}</span>
+                        </label>
+                        {{ sale_form.product_detail_batch }} {# Widget has id="sale_form_product_batch" #}
+                        {% if sale_form.product_detail_batch.errors and form_had_errors_for_sale_modal %}
+                            <p class="text-error text-xs mt-1">{{ sale_form.product_detail_batch.errors|join:", " }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    {# Customer Name - Takes full width on medium screens #}
+                    <div class="form-control w-full md:col-span-2">
+                        <label class="label" for="{{ sale_form.name_of_customer.id_for_label }}">
+                            <span class="label-text">{{ sale_form.name_of_customer.label }}</span>
+                        </label>
+                        {{ sale_form.name_of_customer }}
+                        {% if sale_form.name_of_customer.errors and form_had_errors_for_sale_modal %}
+                            <p class="text-error text-xs mt-1">{{ sale_form.name_of_customer.errors|join:", " }}</p>
+                        {% endif %}
+                    </div>
+
+                    {# Auto-populated: Current Stock Display #}
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ sale_form.current_stock_display.id_for_label }}">
+                            <span class="label-text">{{ sale_form.current_stock_display.label }}</span>
+                        </label>
+                        {{ sale_form.current_stock_display }} {# Widget has id="sale_form_current_stock" #}
+                    </div>
+
+                    {# Auto-populated: Total Items Available Display #}
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ sale_form.total_items_available_display.id_for_label }}">
+                            <span class="label-text">{{ sale_form.total_items_available_display.label }}</span>
+                        </label>
+                        {{ sale_form.total_items_available_display }} {# Widget has id="sale_form_total_items" #}
+                    </div>
+                    
+                    {# Auto-populated: Cost Price Display #}
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ sale_form.cost_price_display.id_for_label }}">
+                            <span class="label-text">{{ sale_form.cost_price_display.label }}</span>
+                        </label>
+                        {{ sale_form.cost_price_display }} {# Widget has id="sale_form_cost_price" #}
+                    </div>
+
+                    {# Quantity to Sell #}
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ sale_form.quantity_items_to_sell.id_for_label }}">
+                            <span class="label-text font-medium">{{ sale_form.quantity_items_to_sell.label }}</span>
+                        </label>
+                        {{ sale_form.quantity_items_to_sell }}
+                        {% if sale_form.quantity_items_to_sell.errors and form_had_errors_for_sale_modal %}
+                            <p class="text-error text-xs mt-1">{{ sale_form.quantity_items_to_sell.errors|join:", " }}</p>
+                        {% endif %}
+                    </div>
+
+                    {# Selling Price per Item #}
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ sale_form.selling_price_per_item.id_for_label }}">
+                            <span class="label-text font-medium">{{ sale_form.selling_price_per_item.label }}</span>
+                        </label>
+                        {{ sale_form.selling_price_per_item }}
+                        {% if sale_form.selling_price_per_item.errors and form_had_errors_for_sale_modal %}
+                            <p class="text-error text-xs mt-1">{{ sale_form.selling_price_per_item.errors|join:", " }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="modal-action mt-8">
+                    <label for="make_sale_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-success">Record Sale</button>
+                </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="make_sale_modal_checkbox">Close</label>
+    </div>
+
+    <!-- Recent Sales List -->
+    <div class="mt-12">
+        <h2 class="text-2xl font-semibold mb-4 text-center">Recent Sales Activity</h2>
+        {% if recent_sales %}
+            <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
+                <table class="table table-sm w-full">
+                    <thead>
+                        <tr>
+                            <th>Date/Time</th>
+                            <th>Product Batch Sold</th>
+                            <th>Customer</th>
+                            <th class="text-center">Qty Sold</th>
+                            <th class="text-right">Sale Price/Item</th>
+                            <th class="text-right">Total Revenue</th>
+                            <th class="text-right">Total Cost</th>
+                            <th class="text-right">Profit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in recent_sales %}
+                        <tr>
+                            <td class="text-xs whitespace-nowrap">{{ sale.sale_time|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                {{ sale.product_detail_snapshot.product_base.name }}
+                                <span class="block text-xs text-neutral-content text-red-400"> (Exp: {{ sale.expiry_date_at_sale|date:"d M Y" }})</span>
+                            </td>
+                            <td>{{ sale.name_of_customer|default:"N/A" }}</td>
+                            <td class="text-center">{{ sale.quantity_items_sold }}</td>
+                            <td class="text-right">Rs&nbsp;{{ sale.selling_price_per_item|floatformat:2 }}</td>
+                            <td class="text-right font-semibold">Rs&nbsp;{{ sale.total_revenue|floatformat:2 }}</td>
+                            <td class="text-right text-sm text-content">Rs&nbsp;{{ sale.total_cost|floatformat:2 }}</td>
+                            <td class="text-right font-bold {% if sale.calculated_profit > 0 %}text-success{% elif sale.calculated_profit < 0 %}text-error{% endif %}">
+                                Rs&nbsp;{{ sale.calculated_profit|floatformat:2 }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-center text-base-content/70 py-6">No sales have been recorded yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const saleModalCheckbox = document.getElementById('make_sale_modal_checkbox');
+    const saleModalForm = document.getElementById('makeSaleModalForm');
+
+    const productBatchSelect = document.getElementById('sale_form_product_batch');
+    const currentStockDisplay = document.getElementById('sale_form_current_stock');
+    const totalItemsDisplay = document.getElementById('sale_form_total_items');
+    const costPriceDisplay = document.getElementById('sale_form_cost_price');
+    const quantityToSellInput = document.getElementById('id_quantity_items_to_sell'); // Django default ID if not overridden
+    const sellingPriceInput = document.getElementById('id_selling_price_per_item'); // Django default ID
+
+    function clearBatchDetailsUI() {
+        currentStockDisplay.value = '---';
+        totalItemsDisplay.value = '---';
+        costPriceDisplay.value = '---';
+        if (sellingPriceInput) sellingPriceInput.value = ''; // Clear previous suggestion
+        if (quantityToSellInput) {
+            quantityToSellInput.value = '0.1'; // Reset quantity
+            quantityToSellInput.removeAttribute('max');
+        }
+    }
+
+    if (productBatchSelect) {
+        productBatchSelect.addEventListener('change', function() {
+            const pk = this.value;
+            if (pk) {
+                fetch(`{% url 'stock:ajax_get_batch_info_for_sale' pk=0 %}`.replace('0', pk))
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+                        return response.json();
+                    })
+                    .then(result => {
+                        if (result.success) {
+                            const data = result.data;
+                            currentStockDisplay.value = `${data.current_stock_master_units_display} ${data.current_stock_master_units_unit || ''}`;
+                            totalItemsDisplay.value = `${data.total_individual_items_available} items`;
+                            costPriceDisplay.value = `Rs ${data.cost_price_per_item}`;
+                            if (sellingPriceInput) sellingPriceInput.value = data.suggested_selling_price_per_item;
+                            if (quantityToSellInput) {
+                                quantityToSellInput.value = '0.1'; // Reset to 1 on new selection
+                                quantityToSellInput.max = data.total_individual_items_available;
+                            }
+                        } else {
+                            clearBatchDetailsUI();
+                            console.error("AJAX Error fetching batch details:", result.error);
+                        }
+                    })
+                    .catch(error => {
+                        clearBatchDetailsUI();
+                        console.error("Fetch/Network error for batch details:", error);
+                    });
+            } else {
+                clearBatchDetailsUI();
+            }
+        });
+
+        // If the form is re-rendered with errors, the selected product batch might still be set.
+        // Trigger the change event to re-populate display fields if a batch is already selected.
+        if (productBatchSelect.value && {{ form_had_errors_for_sale_modal|yesno:"true,false" }}) {
+             // A small delay to ensure dependent elements are ready, though usually not needed with DOMContentLoaded
+            setTimeout(() => { productBatchSelect.dispatchEvent(new Event('change')); }, 50);
+        } else if (!productBatchSelect.value) {
+             clearBatchDetailsUI(); // Clear if nothing selected on initial load
+        }
+    }
+
+    // Clear form when modal is closed, unless it was forced open by errors
+    if (saleModalCheckbox && saleModalForm) {
+        saleModalCheckbox.addEventListener('change', function() {
+            if (!this.checked && !{{ form_had_errors_for_sale_modal|yesno:"true,false" }}) {
+                saleModalForm.reset(); // Resets form fields to their initial HTML state
+                clearBatchDetailsUI(); // Also clear the JS-populated fields
+                // Reset the product_detail_batch select to its first option (empty label)
+                if (productBatchSelect) productBatchSelect.selectedIndex = 0;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

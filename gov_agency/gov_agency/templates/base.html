@@ -1,0 +1,141 @@
+{% load static %}
+<!DOCTYPE html>
+<!-- Apply a DaisyUI theme to the html tag -->
+<html lang="en" data-theme="light"> 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> {# Important for responsiveness #}
+    <title>{% block title %}Gov Agency{% endblock %}</title>
+    
+    <!-- Tailwind CSS & DaisyUI CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="{% static 'css/style.css' %}"> 
+    
+    {# Block for additional page-specific head elements #}
+    {% block extra_head %}
+    {% endblock %}
+    <style>
+       
+    </style>
+</head>
+<body class="bg-base-200 font-sans">
+
+    <div class="flex h-screen"> 
+        <!-- Sidebar -->
+        <aside class="w-50 bg-base-100 text-base-content shadow-lg flex flex-col p-1"> 
+            <div class="text-2xl font-bold text-center mb-6 text-primary">
+                <a href="{% url 'stock:dashboard' %}">AgencyApp</a>
+            </div>
+            <ul class="menu space-y-2 flex-grow"> {# DaisyUI menu component #}
+                <li>
+                    <a href="{% url 'stock:dashboard' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>
+                        Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'stock:sales' %}" class="hover:bg-base-300 ">
+                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                        </svg>
+                        sales
+                    </a>
+                </li> 
+                <li>
+                    <a href="{% url 'stock:create_product' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'add_products' %}active{% endif %}">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Create Product
+                    </a>
+                </li>
+                 <li>
+                    <a href="{% url 'stock:add_product_details' %}" class="hover:bg-base-300 ">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                        </svg>
+                        Product Details
+                    </a>
+                </li> 
+                <li>
+                    <a href="{% url 'stock:manage_vehicles' %}" class="hover:bg-base-300 ">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
+                        Add Vehicals
+                    </a>
+                </li> 
+                  <li>
+                    <a href="{% url 'stock:manage_shops' %}" class="hover:bg-base-300 ">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" /></svg>
+                        Add Shops
+                    </a>
+                </li> 
+            </ul>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-y-auto"> {# Takes remaining space, allows vertical scroll #}
+            <!-- Header -->
+            <header class="bg-base-100 shadow-md p-4 sticky top-0 z-10"> {# Sticky header #}
+                <div class="flex justify-between items-center">
+                    <div>
+                        {# You can put breadcrumbs or page title here #}
+                        <h1 class="text-xl font-semibold text-base-content">{% block page_title %}{% endblock %}</h1>
+                    </div>
+                    <div>
+                        {% if request.user.is_authenticated %}
+                            <span class="text-sm text-base-content mr-3">Logged in as <strong>{{ request.user.username }}</strong></span>
+                            <a href="{% url 'logout' %}" class="btn btn-sm btn-outline btn-error">Logout</a>
+                        {% else %}
+                            <a href="#" class="btn btn-sm btn-primary">Login</a> {# Example Login Link #}
+                        {% endif %}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page-specific content -->
+            <main class="p-5 flex-grow">
+                 {# Django Messages using DaisyUI Alerts #}
+                {% if messages %}
+                    <div  id ="django-messages-container" class="space-y-2 mb-4">
+                    {% for message in messages %}
+                        <div role="alert" class="alert alert-{{ message.tags|lower }} shadow-lg ">
+                            {% if message.tags == 'success' %}
+                                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {% elif message.tags == 'error' %}
+                                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {% else %} {# info, warning #}
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-info shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            {% endif %}
+                            <span>{{ message }}</span>
+                        </div>
+                    {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% block content %}
+
+                {% endblock %}
+            </main>
+        </div>
+    </div>
+
+
+    {% block extra_scripts %}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+    const messagesContainer = document.getElementById('django-messages-container');
+     if (messagesContainer) {
+        const alerts = messagesContainer.querySelectorAll('.alert');
+        alerts.forEach(function(alertElement) {
+            alertElement.classList.add('opacity-100', 'transition-opacity', 'duration-500', 'ease-out');
+            const autoDismissTimer = setTimeout(function() {
+                alertElement.style.opacity = '0';
+                setTimeout(function() {
+                    alertElement.remove(); 
+                },600 );
+            }, 3000); 
+        });
+    }
+});
+</script>
+    {% endblock %}
+</body>
+</html>

@@ -1,0 +1,348 @@
+{% extends "base.html" %} {# Or your actual base.html path #}
+
+{% block title %}Manage Vehicles{% endblock %}
+
+{% block page_title %}Vehicle Management{% endblock %} {# If your base.html has this #}
+
+{% block extra_head %}
+    {{ block.super }}
+    {# If DaisyUI/Tailwind are not globally in base.html, add CDNs here #}
+    {# <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" /> #}
+    {# <script src="https://cdn.tailwindcss.com"></script> #}
+    <style>
+        .table th, .table td { font-size: 0.875rem; padding: 0.5rem; }
+        .modal { z-index: 1050; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %} class="p-4 md:p-6 rounded-box"> 
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-base-content mb-4 sm:mb-0">Your Vehicles</h1>
+        <label for="add_vehicle_modal_checkbox" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+            Add New Vehicle
+        </label>
+    </div>
+
+    <!-- Vehicle List -->
+    <div id="vehicleListContainer">
+        {% if vehicles %}
+            <div class="overflow-x-auto bg-base-100 rounded-box shadow">
+                <table class="table table-sm w-full">
+                    <thead>
+                        <tr>
+                            <th>Number Plate</th>
+                            <th>Type</th>
+                            <th>Driver</th>
+                            <th>Phone</th>
+                            <th>Capacity (kg)</th>
+                            <th>Status</th>
+                            <th>Added On</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vehicle in vehicles %}
+                        <tr class="hover">
+                            <td class="font-semibold">{{ vehicle.vehicle_number }}</td>
+                            <td>{{ vehicle.get_vehicle_type_display }}</td>
+                            <td>{{ vehicle.driver_name|default:"N/A" }}</td>
+                            <td>{{ vehicle.driver_phone|default:"N/A" }}</td>
+                            <td>{{ vehicle.capacity_kg|floatformat:2|default:"N/A" }}</td>
+                            <td>
+                                {% if vehicle.is_active %}
+                                    <span class="badge badge-success badge-sm">Active</span>
+                                {% else %}
+                                    <span class="badge badge-error badge-sm">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-xs">{{ vehicle.created_at|date:"Y-m-d H:i" }}</td>
+                           <td class="space-x-1">
+                             <button type="button"
+                                   class="btn btn-xs btn-info btn-outline open-update-vehicle-modal-btn"
+                                   data-vehicle-pk="{{ vehicle.pk }}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                    Edit
+                                </button>
+                                {# Delete Button - Triggers Modal #}
+                                <button type="button" 
+                                   class="btn btn-xs btn-error btn-outline open-delete-vehicle-modal-btn"
+                                   data-vehicle-pk="{{ vehicle.pk }}"
+                                   data-vehicle-number="{{ vehicle.vehicle_number }}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-center text-base-content/70 py-8">You haven't added any vehicles yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Add Vehicle Modal -->
+     <!-- ADD Vehicle Modal -->
+    <input type="checkbox" id="add_vehicle_modal_checkbox" class="modal-toggle" {% if add_form_in_modal_has_errors %}checked{% endif %} />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="addVehicleModal">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <form id="addVehicleForm" method="post" action="{% url 'stock:manage_vehicles' %}">
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4">Add New Vehicle</h3>
+                
+                {% if add_form.non_field_errors and add_form_in_modal_has_errors %} {# Use add_form #}
+                    <div role="alert" class="alert alert-error text-sm p-3 mb-3">
+                        <svg><!-- error icon --></svg>
+                        <div>{% for error in add_form.non_field_errors %}{{ error }}<br>{% endfor %}</div> {# Use add_form #}
+                    </div>
+                {% endif %}
+
+                <div class="form-grid-modal"> {# Assuming you use this class, or your existing grid classes #}
+                    {% for field in add_form %}  {# <<<<<<<<<<<<<< CORRECTED TO 'add_form' #}
+                        <div class="form-control w-full 
+                            {% if field.name == 'notes' or field.name == 'vehicle_number' %}md:col-span-2{% endif %} 
+                            {% if field.name == 'is_active' %}md:col-span-2 flex flex-row items-center gap-2 py-2{% endif %}">
+                            
+                            {% if field.name == 'is_active' %}
+                                {{ field }} {# Renders checkbox #}
+                                <label class="label cursor-pointer" for="{{ field.id_for_label }}">
+                                    <span class="label-text">{{ field.label }}</span>
+                                </label>
+                            {% else %}
+                                <label class="label" for="{{ field.id_for_label }}">
+                                    <span class="label-text {% if field.field.required %}font-medium{% endif %}">{{ field.label }}</span>
+                                </label>
+                                {{ field }} {# Renders widget with classes from forms.py #}
+                            {% endif %}
+
+                            {% if field.help_text and field.name != 'is_active' %}
+                                <div class="label pt-1"><span class="label-text-alt">{{ field.help_text }}</span></div>
+                            {% endif %}
+                            {% if field.errors and add_form_in_modal_has_errors %} {# Check add_form_in_modal_has_errors #}
+                                <div class="label pt-1"><span class="label-text-alt text-error">{% for error in field.errors %}{{ error }}{% endfor %}</span></div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="modal-action mt-6">
+                    <label for="add_vehicle_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-primary">Save Vehicle</button>
+                </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="add_vehicle_modal_checkbox">Close</label>
+    </div>
+
+
+     <!-- UPDATE Vehicle Modal -->
+    <input type="checkbox" id="update_vehicle_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="updateVehicleModal">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <form id="updateVehicleForm" method="post" action=""> {# Action set by JS #}
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4" id="updateVehicleModalTitle">Update Vehicle</h3>
+                <div id="updateVehicleFormFieldsContainer" class="form-grid-modal">
+                    {# Fields will be populated by JS after fetching data via AJAX #}
+                    {# For initial structure, you can copy the fields from VehicleForm, changing IDs #}
+                    {# Example structure (JS will populate values): #}
+                    <div class="form-control w-full md:col-span-2">
+                        <label class="label" for="update_vehicle_number"><span class="label-text">Vehicle Registration Number</span></label>
+                        <input type="text" name="vehicle_number" id="update_vehicle_number" class="input input-bordered w-full" required>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_vehicle_type"><span class="label-text">Type of Vehicle</span></label>
+                        <select name="vehicle_type" id="update_vehicle_type" class="select select-bordered w-full">
+                            {% for value, text in add_form.fields.vehicle_type.choices %} {# Use choices from add_form #}
+                                <option value="{{ value }}">{{ text }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_driver_name"><span class="label-text">Driver's Name</span></label>
+                        <input type="text" name="driver_name" id="update_driver_name" class="input input-bordered w-full">
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_driver_phone"><span class="label-text">Driver's Phone</span></label>
+                        <input type="text" name="driver_phone" id="update_driver_phone" class="input input-bordered w-full">
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_capacity_kg"><span class="label-text">Capacity (kg)</span></label>
+                        <input type="number" name="capacity_kg" id="update_capacity_kg" step="0.01" class="input input-bordered w-full">
+                    </div>
+                     <div class="form-control w-full md:col-span-2 flex flex-row items-center gap-2 py-2">
+                        <input type="checkbox" name="is_active" id="update_is_active" class="checkbox checkbox-primary align-middle">
+                        <label class="label cursor-pointer" for="update_is_active"><span class="label-text">Vehicle is Active</span></label>
+                    </div>
+                    <div class="form-control w-full md:col-span-2">
+                        <label class="label" for="update_notes"><span class="label-text">Notes</span></label>
+                        <textarea name="notes" id="update_notes" class="textarea textarea-bordered w-full h-24"></textarea>
+                    </div>
+                </div>
+                <div class="modal-action mt-6">
+                    <label for="update_vehicle_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-info">Save Changes</button>
+                </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="update_vehicle_modal_checkbox">Close</label>
+    </div>
+
+
+     <!-- DELETE VEHICLE CONFIRMATION MODAL -->
+    <input type="checkbox" id="delete_vehicle_confirm_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="deleteVehicleConfirmModal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-error">Confirm Vehicle Deletion</h3>
+            <p class="py-4" id="deleteVehicleConfirmMessageText">Are you sure you want to delete this vehicle?</p>
+            <p class="mt-2 mb-6 text-warning-content bg-warning/20 p-3 rounded-md text-sm">
+                This action cannot be undone.
+            </p>
+            <div class="modal-action">
+                <form id="deleteVehicleForm" method="POST" action=""> {# Action will be set by JS #}
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-error">Yes, Delete Vehicle</button>
+                </form>
+                <label for="delete_vehicle_confirm_modal_checkbox" class="btn btn-ghost">Cancel</label>
+            </div>
+        </div>
+        <label class="modal-backdrop" for="delete_vehicle_confirm_modal_checkbox">Close</label>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+    {{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const addVehicleModalCheckbox = document.getElementById('add_vehicle_modal_checkbox');
+    const addVehicleForm = document.getElementById('addVehicleForm');
+
+    if (addVehicleModalCheckbox && addVehicleForm) {
+        addVehicleModalCheckbox.addEventListener('change', function() {
+            // Only reset if closing and no server-side errors forced it open
+            const formHadErrorsOnLoad = {{ form_in_modal_has_errors|yesno:"true,false" }};
+            if (!this.checked && !formHadErrorsOnLoad) { 
+                addVehicleForm.reset();
+                // Clear any manually added error messages if you were doing that client-side
+            }
+        });
+    }
+    // If form_in_modal_has_errors is true, the modal is already checked by Django template.
+    // You could add JS to focus the first field with an error if desired.
+    const formHadErrors = {{ form_in_modal_has_errors|yesno:"true,false" }};
+    if (formHadErrors && addVehicleModalCheckbox.checked) {
+        const firstErrorInput = addVehicleForm.querySelector('.input-error, .select-error, .textarea-error');
+        if (firstErrorInput) {
+            firstErrorInput.focus();
+        } else {
+            // Fallback to focus the first visible input/select/textarea
+            const firstFormElement = addVehicleForm.querySelector('input:not([type="hidden"]):not([type="checkbox"]), select, textarea');
+            if (firstFormElement) {
+                // firstFormElement.focus(); // Autofocus can sometimes be disruptive
+            }
+        }
+    }
+
+    const updateVehicleModalCheckbox = document.getElementById('update_vehicle_modal_checkbox');
+    const updateVehicleForm = document.getElementById('updateVehicleForm');
+    const updateVehicleModalTitle = document.getElementById('updateVehicleModalTitle');
+    // const updateVehicleFormFieldsContainer = document.getElementById('updateVehicleFormFieldsContainer'); // Not strictly needed if populating directly
+    const openUpdateVehicleModalButtons = document.querySelectorAll('.open-update-vehicle-modal-btn');
+
+    openUpdateVehicleModalButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const vehiclePk = this.dataset.vehiclePk;
+            if (!vehiclePk) return;
+
+            updateVehicleForm.action = `{% url 'stock:vehicle_update_action' vehicle_pk=0 %}`.replace('0', vehiclePk);
+            
+            // Show loading/clear previous in modal (optional, good for UX)
+            // updateVehicleFormFieldsContainer.innerHTML = '<p class="col-span-full text-center">Loading vehicle data...</p>';
+            updateVehicleModalTitle.textContent = "Loading Vehicle Data...";
+            updateVehicleModalCheckbox.checked = true; // Show modal while fetching
+
+            fetch(`{% url 'stock:ajax_get_vehicle_data' vehicle_pk=0 %}`.replace('0', vehiclePk))
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.json();
+                })
+                .then(result => {
+                    if (result.success) {
+                        const data = result.data;
+                        updateVehicleModalTitle.textContent = `Update Vehicle: ${data.vehicle_number}`;
+                        
+                        // Populate form fields
+                        updateVehicleForm.querySelector('#update_vehicle_number').value = data.vehicle_number;
+                        updateVehicleForm.querySelector('#update_vehicle_type').value = data.vehicle_type;
+                        updateVehicleForm.querySelector('#update_driver_name').value = data.driver_name;
+                        updateVehicleForm.querySelector('#update_driver_phone').value = data.driver_phone;
+                        updateVehicleForm.querySelector('#update_capacity_kg').value = data.capacity_kg;
+                        updateVehicleForm.querySelector('#update_notes').value = data.notes;
+                        updateVehicleForm.querySelector('#update_is_active').checked = data.is_active;
+                    } else {
+                        updateVehicleModalTitle.textContent = "Error Loading Data";
+                        // updateVehicleFormFieldsContainer.innerHTML = `<p class="col-span-full text-center text-error">Error: ${result.error || 'Could not load data.'}</p>`;
+                        alert(`Error: ${result.error || 'Could not load vehicle data.'}`);
+                        updateVehicleModalCheckbox.checked = false; // Hide modal on error
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching vehicle data for update:', error);
+                    updateVehicleModalTitle.textContent = "Error Loading Data";
+                    // updateVehicleFormFieldsContainer.innerHTML = `<p class="col-span-full text-center text-error">Network or server error.</p>`;
+                    alert("Network or server error while fetching vehicle data.");
+                    updateVehicleModalCheckbox.checked = false; // Hide modal on error
+                });
+        });
+    });
+
+    if (updateVehicleModalCheckbox && updateVehicleForm) {
+        updateVehicleModalCheckbox.addEventListener('change', function() {
+            if (!this.checked) { // If modal is being closed
+                updateVehicleForm.reset(); // Reset form fields
+                updateVehicleForm.action = ""; // Clear action
+                updateVehicleModalTitle.textContent = "Update Vehicle"; // Reset title
+            }
+        });
+    }
+
+
+     // --- Delete Vehicle Modal JS ---
+    const deleteVehicleConfirmModalCheckbox = document.getElementById('delete_vehicle_confirm_modal_checkbox');
+    const deleteVehicleConfirmMessageTextEl = document.getElementById('deleteVehicleConfirmMessageText');
+    const deleteVehicleForm = document.getElementById('deleteVehicleForm');
+    const openDeleteVehicleModalButtons = document.querySelectorAll('.open-delete-vehicle-modal-btn');
+
+    openDeleteVehicleModalButtons.forEach(button => {
+        button.addEventListener('click', function () {
+            const vehiclePk = this.dataset.vehiclePk;
+            const vehicleNumber = this.dataset.vehicleNumber;
+
+            // Update confirmation message
+            deleteVehicleConfirmMessageTextEl.innerHTML = `Are you sure you want to permanently delete vehicle: <strong class="text-error">${vehicleNumber}</strong>?`;
+            
+            // Set the form action URL for the specific vehicle
+            // The URL name 'stock:delete_vehicle_action' must match your urls.py
+            deleteVehicleForm.action = `{% url 'stock:delete_vehicle_action' vehicle_pk=0 %}`.replace('0', vehiclePk);
+
+            // Show the modal
+            if(deleteVehicleConfirmModalCheckbox) deleteVehicleConfirmModalCheckbox.checked = true;
+        });
+    });
+
+    // Optional: Clear modal message when closed without confirming
+    if(deleteVehicleConfirmModalCheckbox) {
+        deleteVehicleConfirmModalCheckbox.addEventListener('change', function() {
+            if (!this.checked) {
+                deleteVehicleConfirmMessageTextEl.textContent = 'Are you sure you want to delete this vehicle?'; // Reset message
+                deleteVehicleForm.action = ''; // Clear action
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

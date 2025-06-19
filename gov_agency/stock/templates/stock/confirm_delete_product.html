@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Delete {{ product.name }}{% endblock %}
+{% block page_title %}Confirm Deletion{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-base-100 p-6 rounded-box shadow-lg text-center" data-theme="light"> 
+    <h2 class="text-2xl font-bold mb-4 text-error">Delete Product: {{ product.name }}</h2>
+    <p class="mb-6 text-base-content">Are you sure you want to permanently delete the product "{{ product.name }}"?</p>
+    <p class="mb-6 text-sm text-warning-content bg-warning p-2 rounded">This action cannot be undone.</p>
+    
+    <form method="POST" action="{% url 'stock:delete_product' product_id=product.id %}">
+        {% csrf_token %}
+        <div class="flex justify-center space-x-4">
+            <a href="{% url 'stock:create_product' %}" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-error">Yes, Delete Product</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

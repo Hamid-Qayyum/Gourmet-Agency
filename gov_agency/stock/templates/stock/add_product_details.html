@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Manage Product Details{% endblock %}
+{% block page_title %}Product Stock Details{% endblock %}
+{% block extra_head %}
+  {{ block.super }}
+   {{ block.super }}
+    <style>
+        .table th, .table td {
+            padding: 0.5rem 0.75rem; /* Smaller padding for denser table */
+            font-size: 0.875rem; /* Smaller font size */
+        }
+        .table th:first-child, .table td:first-child {
+            width: 3rem; /* Checkbox column width */
+        }
+        /* Ensure modal is above other content if z-index issues arise */
+        .modal { z-index: 1050; } 
+    </style>
+    {% endblock %}
+
+{% block content %}
+   <div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}> 
+     <!-- Top Action Bar: Search and Buttons -->
+      <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div id="global-action-buttons">
+            <label for="add_detail_modal_checkbox" id="addDetailBtnGlobal" class="btn btn-primary {% if not user_has_base_products %}btn-disabled{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                Add Stock Detail
+            </label>
+        </div>
+        <div id="contextual-action-buttons" class="hidden"> {# Initially hidden #}
+            <button id="updateSelectedBtn" class="btn btn-info btn-sm mr-2" disabled>Update Selected</button>
+            <button id="deleteSelectedBtn" class="btn btn-error btn-sm" disabled>Delete Selected</button>
+        </div>
+        <form method="GET" action="{% url 'stock:add_product_details' %}" class="flex items-center gap-2">
+            <input type="text" name="q" placeholder="Search by product name..." value="{{ search_query|default:'' }}" class="input input-bordered input-sm w-full sm:w-auto">
+            <button type="submit" class="btn btn-sm btn-ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </button>
+        </form>
+    </div>
+
+     <!-- Product Details Table -->
+    {% if product_details %}
+    <div class="overflow-x-auto bg-base-100 rounded-box shadow">
+        <table class="table table-sm w-full" id="productDetailsTable"> {# table-sm for smaller text/padding #}
+            <thead>
+                <tr>
+                    <th>
+                        <label>
+                            <input type="checkbox" id="selectAllCheckbox" class="checkbox checkbox-xs sm:checkbox-sm" />
+                        </label>
+                    </th>
+                    <th>Product Name</th>
+                    <th>Packing</th>
+                    <th>Qty</th>
+                    <th>Items/Master</th>
+                    <th>Price/Item</th>
+                    <th>Total Price of Packing</th>
+                    <th>Exp</th>
+                    <th>Total Items</th>
+                    <th>Stock</th>
+                    <th>Stock Total Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for detail in product_details %}
+                <tr class="hover"
+                    data-pk="{{ detail.pk }}"
+                    data-product-base-id="{{ detail.product_base.id }}"
+                    data-product-base-name="{{ detail.product_base.name}}"
+                    data-packing-type="{{ detail.packing_type }}"
+                    data-quantity-in-packing="{{ detail.quantity_in_packing|stringformat:'.2f' }}" {# Ensure correct decimal format for JS #}
+                    data-unit-of-measure="{{ detail.unit_of_measure }}"
+                    data-items-per-master-unit="{{ detail.items_per_master_unit }}"
+                    data-price-per-item="{{ detail.price_per_item|stringformat:'.2f' }}"
+                    data-expirey-date="{{ detail.expirey_date|date:'m-d-y' }}" 
+                    data-stock = "{{detail.stock}}"
+                    >
+                    <td>
+                        <label>
+                            <input type="checkbox" name="selected_details" value="{{ detail.id }}" class="checkbox checkbox-xs sm:checkbox-sm row-checkbox" />
+                        </label>
+                    </td>
+                    <td class="product-name">{{ detail.product_base.name }}<br><span class="text-green-700">{{detail.updated_at}}</span></td>
+                    <td class="packing-type">{{ detail.packing_type }}</td>
+                    <td class="quantity-in-packing">{{ detail.quantity_in_packing|floatformat:2 }}&nbsp;{{ detail.unit_of_measure }}</td>
+                    <td class="items-per-master-unit">{{ detail.items_per_master_unit }}</td>
+                    <td class="price-per-item">Rs&nbsp;{{ detail.price_per_item|floatformat:2 }}</td>
+                    <td class=" font-semibold">Rs&nbsp;{{ detail.total_price_for_master_unit|floatformat:2 }}</td>
+                    <td class="text-red-500">{{detail.expirey_date}}</td>
+                    <td>{{detail.total_items_in_stock}}</td>
+                    <td>{{detail.stock}}</td>
+                    <td class="font-bold">Rs&nbsp;{{detail.total_price_of_stock}}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        {% if search_query %}
+            <p class="text-center text-base-content/70 py-8">No product details found matching your search for "{{ search_query }}".</p>
+        {% else %}
+            <p class="text-center text-base-content/70 py-8">No product stock details added yet. Click "Add Stock Detail" to start.</p>
+        {% endif %}
+    {% endif %}
+
+
+
+
+     <!-- Add Product Detail Modal -->
+    <input type="checkbox" id="add_detail_modal_checkbox" class="modal-toggle" {% if form_had_errors %}checked{% endif %} />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog">
+        <div class="modal-box w-11/12 max-w-2xl"> {# Wider modal #}
+            <form method="post" id="addDetailForm" action="{% url 'stock:add_product_details' %}{% if search_query %}?q={{ search_query }}{% endif %}">
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4 text-base-content">Add New Product Stock Detail</h3>
+                
+                {% if form.non_field_errors %}
+                <div role="alert" class="alert alert-error text-sm p-3 mb-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <div class="text-error-content">{% for error in form.non_field_errors %}{{ error }}<br>{% endfor %}</div>
+                </div>
+                {% endif %}
+
+                {# Render form fields - you can render them individually for more control #}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for field in form %}
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ field.id_for_label }}">
+                            <span class="label-text {% if field.field.required %}font-medium{% endif %}">{{ field.label }}</span>
+                        </label>
+                        {{ field }} {# Renders widget with classes from forms.py #}
+                        {% if field.help_text %}
+                            <div class="label"><span class="label-text-alt">{{ field.help_text }}</span></div>
+                        {% endif %}
+                        {% if field.errors %}
+                            <div class="label"><span class="label-text-alt text-error">{% for error in field.errors %}{{ error }}{% endfor %}</span></div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="modal-action mt-6">
+                    <label id="form_close_button" for="add_detail_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-primary" {% if not user_has_base_products %}disabled{% endif %}>Save Detail</button>
+                </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="add_detail_modal_checkbox">Close</label>
+    </div>
+
+    <!-- UPDATE Product Detail Modal (Single, Reusable) -->
+    <input type="checkbox" id="update_detail_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="updateDetailModal">
+        <div class="modal-box w-11/12 max-w-2xl">
+            <form id="updateDetailModalForm" method="post"> {# Action set by JS #}
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4" id="updateModalTitle">Update Stock Detail</h3>
+                {# We will use the structure of the create_form to build the fields here for simplicity, #}
+                {# but with different IDs for JavaScript targeting if necessary. #}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control w-full">
+                        <label class="label" for="update_product_base"><span class="label-text">Base Product Name</span></label>
+                      <select name="product_base" id="update_product_base" class="select select-bordered w-full" required>
+                            {# Options will be populated by JS, or copied from create_form #}
+                            {% for detail in product_details %}
+                                 <option value="{{detail.product_base.id}}">{{ detail.product_base.name }} <span class="text-red-500">{{detail.expirey_date}}</span></option>
+                           {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_packing_type"><span class="label-text">Type of Packaging</span></label>
+                        <input type="text" name="packing_type" id="update_packing_type" class="input input-bordered w-full"  required>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_quantity_in_packing"><span class="label-text">Quantity in this Pack</span></label>
+                        <input type="number" name="quantity_in_packing" id="update_quantity_in_packing" step="0.01" class="input input-bordered w-full" required>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_unit_of_measure"><span class="label-text">Unit (e.g., Liters, kg, pcs)</span></label>
+                        <input type="text" name="unit_of_measure" id="update_unit_of_measure" class="input input-bordered w-full" required>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_items_per_master_unit"><span class="label-text">Items per Master Unit</span></label>
+                        <input type="number" name="items_per_master_unit" id="update_items_per_master_unit" step="1" class="input input-bordered w-full" required>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_price_per_item"><span class="label-text">Price per Single Item/Pack</span></label>
+                        <input type="number" name="price_per_item" id="update_price_per_item" class="input input-bordered w-full" required>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="update_stock"><span class="label-text">Stock</span></label>
+                        <input type="number" name="stock" id="update_stock" step="0.01" class="input input-bordered w-full" required>
+                    </div>
+                    
+                    <div class="form-control w-full md:col-span-2">
+                        <label class="label" for="update_expirey_date"><span class="label-text">Expirey Date</span></label>                       </div>
+                        <input name="expirey_date" id="update_expirey_date" type="date" class="date w-full"  required>
+                </div>
+                <div class="modal-action mt-6">
+                    <label for="update_detail_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-info">Save Changes</button>
+                </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="update_detail_modal_checkbox">Close</label>
+    </div>
+
+
+    <!-- Placeholder for Delete Confirmation Modal (for selected items) -->
+    <input type="checkbox" id="delete_selected_confirm_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="deleteSelectedConfirmModal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-error">Confirm Deletion of Selected Items</h3>
+            <p class="py-4" id="deleteSelectedConfirmMessage">Are you sure you want to delete the selected product details? This action cannot be undone.</p>
+            <div class="modal-action">
+                <form id="deleteSelectedProductForm" method="POST">
+                    {% csrf_token %}
+                    {# Hidden inputs for selected IDs will be added by JS #}
+                    <button type="submit" class="btn btn-error">Yes, Delete Selected</button>
+                </form>
+                <label for="delete_selected_confirm_modal_checkbox" class="btn btn-ghost">Cancel</label>
+            </div>
+        </div>
+        <label class="modal-backdrop" for="delete_selected_confirm_modal_checkbox">Close</label>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    const form_close_button = document.getElementById('form_close_button')
+    const modalCheckbox = document.getElementById('add_detail_modal_checkbox');
+    const form = document.getElementById('addDetailForm');
+
+    modalCheckbox.addEventListener('change', () => {
+        if (!modalCheckbox.checked) {
+            // Clear form inputs
+            form.reset();
+        }
+    });
+    
+
+
+    document.addEventListener('DOMContentLoaded', function () {
+    const globalAddButton = document.getElementById('addDetailBtnGlobal');
+    const contextualActionsDiv = document.getElementById('contextual-action-buttons');
+    const openUpdateModalBtn = document.getElementById('updateSelectedBtn');
+    const deleteSelectedButton = document.getElementById('deleteSelectedBtn');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+    const table = document.getElementById('productDetailsTable');
+    const updateDetailModalCheckbox = document.getElementById('update_detail_modal_checkbox');
+
+
+    function updateContextualButtons() {
+        const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
+        const selectedCount = selectedCheckboxes.length;
+
+        if (selectedCount > 0) {
+            if (globalAddButton) globalAddButton.classList.add('hidden');
+            contextualActionsDiv.classList.remove('hidden');
+            deleteSelectedButton.disabled = false;
+            openUpdateModalBtn.disabled = selectedCount !== 1; // Enable update only if exactly one is selected
+        } else {
+            if (globalAddButton) globalAddButton.classList.remove('hidden');
+            contextualActionsDiv.classList.add('hidden');
+            deleteSelectedButton.disabled = true;
+            openUpdateModalBtn.disabled = true;
+        }
+    }
+
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function () {
+            rowCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            updateContextualButtons();
+        });
+    }
+
+    rowCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            if (!checkbox.checked && selectAllCheckbox) {
+                selectAllCheckbox.checked = false;
+            }
+            // Check if all row checkboxes are checked
+            let allChecked = true;
+            rowCheckboxes.forEach(cb => {
+                if (!cb.checked) allChecked = false;
+            });
+            if (selectAllCheckbox) selectAllCheckbox.checked = allChecked;
+            
+            updateContextualButtons();
+        });
+    });
+
+    // Initial state
+    updateContextualButtons();
+
+    
+
+
+    // --- Placeholder for Update Selected Button Action ---
+                if (openUpdateModalBtn) {
+                    openUpdateModalBtn.addEventListener('click', function() {
+                        const selectedCheckbox = document.querySelector('.row-checkbox:checked');
+                        const updateModalTitle = document.getElementById('updateModalTitle');
+                    if (!selectedCheckbox) return; // Should be disabled if none selected
+                        const selectedRow = selectedCheckbox.closest('tr');
+                        console.log("selected row exp date: "+selectedRow.dataset.expireyDate)
+                        if (!selectedRow) return;
+                        const detailId = selectedRow.dataset.pk;
+                        updateModalTitle.textContent = `Update Detail for: ${selectedRow.querySelector('.product-name').textContent.trim()}`;
+                        // Set form action
+                        updateDetailModalForm.action = `{% url 'stock:product_detail_update' pk=0 %}`.replace('0', detailId);
+                        // Populate form fields from data attributes  data-product-base-id data-stock
+                        //updateDetailModalForm.querySelector('#update_product_base').value = selectedRow.dataset.productBaseID;
+
+                        updateDetailModalForm.querySelector('#update_packing_type').value = selectedRow.dataset.packingType;
+                        updateDetailModalForm.querySelector('#update_quantity_in_packing').value = selectedRow.dataset.quantityInPacking;
+                        updateDetailModalForm.querySelector('#update_unit_of_measure').value = selectedRow.dataset.unitOfMeasure;
+                        updateDetailModalForm.querySelector('#update_items_per_master_unit').value = selectedRow.dataset.itemsPerMasterUnit;
+                        updateDetailModalForm.querySelector('#update_price_per_item').value = selectedRow.dataset.pricePerItem;
+                        updateDetailModalForm.querySelector('#update_stock').value = selectedRow.dataset.stock;
+
+
+                        const originalDate = selectedRow.dataset.expireyDate;
+                        const dateObj = new Date(originalDate);
+                        // Format to YYYY-MM-DD
+                        const year = dateObj.getFullYear();
+                        const month = String(dateObj.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+                        const day = String(dateObj.getDate()).padStart(2, '0');
+                        const formattedDate = `${year}-${month}-${day}`;
+                        console.log(formattedDate); // "2025-07-08"
+                        updateDetailModalForm.querySelector('#update_expirey_date').value = formattedDate; 
+
+                        updateDetailModalCheckbox.checked = true; // Show modal
+        });
+    }
+
+    // Clear update modal form when it's hidden
+    if (updateDetailModalCheckbox) {
+        updateDetailModalCheckbox.addEventListener('change', function() {
+            if (!this.checked) { // If modal is being closed
+                updateDetailModalForm.reset();
+                updateDetailModalForm.action = ""; // Clear action
+                updateModalTitle.textContent = "Update Stock Detail"; // Reset title
+            }
+        });
+    }
+        
+    
+
+    // --- Placeholder for Delete Selected Button Action ---
+    if (deleteSelectedButton) {
+        deleteSelectedButton.addEventListener('click', function() {
+            const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (selectedCheckboxes.length > 0) {
+                const selectedIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+                const deleteConfirmModalCheckbox = document.getElementById('delete_selected_confirm_modal_checkbox');
+                const deleteSelectedForm = document.getElementById('deleteSelectedProductForm');
+                const confirmMessageEl = document.getElementById('deleteSelectedConfirmMessage');
+
+                confirmMessageEl.textContent = `Are you sure you want to delete ${selectedIds.length} selected product detail(s)? This action cannot be undone.`;
+                
+                // Clear previous hidden inputs
+                deleteSelectedForm.querySelectorAll('input[name="selected_details_ids"]').forEach(inp => inp.remove());
+
+                // Add hidden inputs for each selected ID
+                selectedIds.forEach(id => {
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'selected_details_ids'; // Use a different name than row checkboxes
+                    hiddenInput.value = id;
+                    deleteSelectedForm.appendChild(hiddenInput);
+                });
+
+                deleteSelectedForm.action = "{% url 'stock:product_detail_delete_selected' %}";     
+                if(deleteConfirmModalCheckbox) deleteConfirmModalCheckbox.checked = true; 
+            }
+        });
+    }
+}); 
+</script>
+{% endblock %}
