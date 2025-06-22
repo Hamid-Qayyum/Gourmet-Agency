@@ -3,37 +3,38 @@
 {% block page_title %}Process Pending Deliveries{% endblock %}
 
 {% block content %}
-<div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+<div class="p-4 md:p-6">
     <h1 class="text-2xl font-bold mb-6">Sales Pending Delivery</h1>
-
-    {% if pending_sales %}
+    {% if pending_transactions %}
         <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
             <table class="table table-sm w-full">
                 <thead>
                     <tr>
-                        <th>Sale ID</th>
+                        <th>Tx ID</th>
                         <th>Date</th>
                         <th>Customer</th>
-                        <th>Product Batch</th>
-                        <th>Qty Dispatched</th>
+                        <th>Items</th>
                         <th>Vehicle</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for sale in pending_sales %}
+                    {% for tx in pending_transactions %} {# Changed from sale to tx #}
                     <tr>
-                        <td>#{{ sale.pk }}</td>
-                        <td class="text-xs">{{ sale.sale_time|date:"Y-m-d H:i" }}</td>
-                        <td>{{ sale.customer_shop.name|default:sale.customer_name_manual|default:"N/A" }}</td>
-                        <td>
-                            {{ sale.product_detail_snapshot.product_base.name }}
-                            <span class="block text-xs text-neutral-content">(Exp: {{ sale.expiry_date_at_sale|date:"d M Y" }})</span>
+                        <td>#{{ tx.pk }}</td>
+                        <td class="text-xs">{{ tx.transaction_time|date:"Y-m-d H:i" }}</td>
+                        <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A" }}</td>
+                        <td class="text-xs">
+                            {% for item in tx.items.all|slice:":2" %}
+                                {{ item.product_detail_snapshot.product_base.name }} ({{item.quantity_sold_decimal}})<br>
+                            {% endfor %}
+                            {% if tx.items.all.count > 2 %}...and more{% endif %}
                         </td>
-                        <td class="text-center">{{ sale.quantity_sold_decimal }}</td>
-                        <td>{{ sale.assigned_vehicle.vehicle_number|default:"N/A" }}</td>
+                        <td>{{ tx.assigned_vehicle.vehicle_number|default:"N/A" }}</td>
                         <td>
-                            <a href="{% url 'stock:process_delivery_return' sale_pk=sale.pk %}" class="btn btn-xs btn-info">
+                            {# The URL name for processing might need to change if it expected old Sale pk #}
+                            {# Assuming process_delivery_return view now takes SalesTransaction pk #}
+                            <a href="{% url 'stock:process_delivery_return' sale_pk=tx.pk %}" class="btn btn-xs btn-info">
                                 Process Delivery/Return
                             </a>
                         </td>
@@ -43,7 +44,7 @@
             </table>
         </div>
     {% else %}
-        <p class="text-center text-base-content/70 py-8">No sales are currently pending delivery.</p>
+        <p class="text-center text-base-content/70 py-8">No transactions are currently pending delivery.</p>
     {% endif %}
 </div>
 {% endblock %}

@@ -1,135 +1,86 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize %} 
 
 {% block title %}Sales Report & Charts{% endblock %}
 {% block page_title %}Sales Dashboard{% endblock %}
 
-{% block extra_head %}
-    {{ block.super }}
-    <!-- Chart.js CDN -->
+{% block extra_head %}{{ block.super }}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <style>
-        .chart-container {
-            position: relative;
-            margin: auto;
-            height: 300px; /* Adjust as needed */
-            width: 100%;   /* Adjust as needed */
-            max-width: 700px; /* Optional max width */
-        }
-    </style>
+    <style> .chart-container { /* ... */ } </style>
 {% endblock %}
 
 {% block content %}
-<div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+<div class="p-4 md:p-6">
     <h1 class="text-3xl font-bold mb-2 text-center">Sales Dashboard</h1>
-    <p class="text-center text-sm text-base-content/70 mb-8">Report generated on: {{ report_generation_time|date:"F j, Y, P" }}</p>
+    <p class="text-center text-sm text-base-content/70 mb-8">Generated: {{ report_generation_time|date:"F j, Y, P" }}</p>
 
-    <!-- Summary Stats Cards (as before) -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {# ... your existing cards for today, this week, this month, this year ... #}
-         <!-- Today's Stats -->
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body items-center text-center">
-                <h2 class="card-title">Today</h2>
-                <div class="stats stats-vertical shadow bg-transparent">
-                    <div class="stat"><div class="stat-title">Sales</div><div class="stat-value">{{ stats_today.sales_count|intcomma }}</div></div>
-                    <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_today.total_final_revenue|floatformat:2|intcomma }}</div></div>
-                    <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_today.total_final_profit > 0 %}text-success{% elif stats_today.total_final_profit < 0 %}text-error{% endif %}">Rs {{ stats_today.total_final_profit|floatformat:2|intcomma }}</div></div>
-                </div>
+        <!-- Today's Stats -->
+        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
+            <h2 class="card-title">Today</h2>
+            <div class="stats stats-vertical shadow bg-transparent">
+                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_today.transactions_count|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_today.total_grand_revenue|floatformat:2|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_today.total_grand_profit > 0 %}text-success{% elif stats_today.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_today.total_grand_profit|floatformat:2|intcomma }}</div></div>
             </div>
-        </div>
+        </div></div>
         <!-- This Week -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center"><h2 class="card-title">This Week</h2><div class="stats stats-vertical shadow bg-transparent"><div class="stat"><div class="stat-title">Sales</div><div class="stat-value">{{ stats_this_week.sales_count|intcomma }}</div></div><div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_week.total_final_revenue|floatformat:2|intcomma }}</div></div><div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_week.total_final_profit > 0 %}text-success{% elif stats_this_week.total_final_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_week.total_final_profit|floatformat:2|intcomma }}</div></div></div></div></div>
+        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
+            <h2 class="card-title">This Week</h2>
+            <div class="stats stats-vertical shadow bg-transparent">
+                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_this_week.transactions_count|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_week.total_grand_revenue|floatformat:2|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_week.total_grand_profit > 0 %}text-success{% elif stats_this_week.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_week.total_grand_profit|floatformat:2|intcomma }}</div></div>
+            </div>
+        </div></div>
         <!-- This Month -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center"><h2 class="card-title">This Month</h2><div class="stats stats-vertical shadow bg-transparent"><div class="stat"><div class="stat-title">Sales</div><div class="stat-value">{{ stats_this_month.sales_count|intcomma }}</div></div><div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_month.total_final_revenue|floatformat:2|intcomma }}</div></div><div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_month.total_final_profit > 0 %}text-success{% elif stats_this_month.total_final_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_month.total_final_profit|floatformat:2|intcomma }}</div></div></div></div></div>
+        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
+            <h2 class="card-title">This Month</h2>
+            <div class="stats stats-vertical shadow bg-transparent">
+                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_this_month.transactions_count|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_month.total_grand_revenue|floatformat:2|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_month.total_grand_profit > 0 %}text-success{% elif stats_this_month.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_month.total_grand_profit|floatformat:2|intcomma }}</div></div>
+            </div>
+        </div></div>
         <!-- This Year -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center"><h2 class="card-title">This Year</h2><div class="stats stats-vertical shadow bg-transparent"><div class="stat"><div class="stat-title">Sales</div><div class="stat-value">{{ stats_this_year.sales_count|intcomma }}</div></div><div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_year.total_final_revenue|floatformat:2|intcomma }}</div></div><div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_year.total_final_profit > 0 %}text-success{% elif stats_this_year.total_final_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_year.total_final_profit|floatformat:2|intcomma }}</div></div></div></div></div>
+        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
+            <h2 class="card-title">This Year</h2>
+            <div class="stats stats-vertical shadow bg-transparent">
+                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_this_year.transactions_count|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_year.total_grand_revenue|floatformat:2|intcomma }}</div></div>
+                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_year.total_grand_profit > 0 %}text-success{% elif stats_this_year.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_year.total_grand_profit|floatformat:2|intcomma }}</div></div>
+            </div>
+        </div></div>
     </div>
 
     <div class="divider my-8">Visual Charts</div>
-
-    <!-- Charts Section -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h2 class="card-title">Daily Revenue (Last 7 Days)</h2>
-                <div class="chart-container">
-                    <canvas id="dailyRevenueChart"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h2 class="card-title">Monthly Revenue (Last 6 Months)</h2>
-                <div class="chart-container">
-                    <canvas id="monthlyRevenueChart"></canvas>
-                </div>
-            </div>
-        </div>
+        <div class="card bg-base-100 shadow-xl"><div class="card-body"><h2 class="card-title">Daily Revenue (Last 7 Days)</h2><div class="chart-container"><canvas id="dailyRevenueChart"></canvas></div></div></div>
+        <div class="card bg-base-100 shadow-xl"><div class="card-body"><h2 class="card-title">Monthly Revenue (Last 6 Months)</h2><div class="chart-container"><canvas id="monthlyRevenueChart"></canvas></div></div></div>
     </div>
-
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 {{ block.super }}
 <script>
+// Chart.js script from previous answer, should still work as it expects
+// daily_chart_labels, daily_chart_revenue, monthly_chart_labels, monthly_chart_revenue
+// which are still being passed with data from SalesTransaction.grand_total_revenue.
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Daily Revenue Chart ---
     const dailyCtx = document.getElementById('dailyRevenueChart');
     if (dailyCtx) {
-        const dailyLabels = JSON.parse('{{ daily_chart_labels|escapejs }}');
-        const dailyRevenue = JSON.parse('{{ daily_chart_revenue|escapejs }}');
-
-        new Chart(dailyCtx, {
-            type: 'line', // or 'bar'
-            data: {
-                labels: dailyLabels,
-                datasets: [{
-                    label: 'Daily Revenue (Rs)',
-                    data: dailyRevenue,
-                    borderColor: 'hsl(var(--p))', // DaisyUI primary color
-                    backgroundColor: 'hsla(var(--p)/.2)', // DaisyUI primary color with opacity
-                    tension: 0.1,
-                    fill: true,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }
-                }
-            }
-        });
+        const dailyLabels = JSON.parse('{{ daily_chart_labels|escapejs|default:"[]" }}');
+        const dailyRevenue = JSON.parse('{{ daily_chart_revenue|escapejs|default:"[]" }}');
+        // ... (rest of daily chart init)
+         new Chart(dailyCtx, {type: 'line',data: {labels: dailyLabels,datasets: [{label: 'Daily Revenue (Rs)',data: dailyRevenue,borderColor: 'hsl(var(--p))',backgroundColor: 'hsla(var(--p)/.2)',tension: 0.1,fill: true,}]},options: {responsive: true,maintainAspectRatio: false,scales: {y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }}}});
     }
-
-    // --- Monthly Revenue Chart ---
     const monthlyCtx = document.getElementById('monthlyRevenueChart');
     if (monthlyCtx) {
-        const monthlyLabels = JSON.parse('{{ monthly_chart_labels|escapejs }}');
-        const monthlyRevenue = JSON.parse('{{ monthly_chart_revenue|escapejs }}');
-
-        new Chart(monthlyCtx, {
-            type: 'bar', // or 'line'
-            data: {
-                labels: monthlyLabels,
-                datasets: [{
-                    label: 'Monthly Revenue (Rs)',
-                    data: monthlyRevenue,
-                    backgroundColor: 'hsl(var(--s))', // DaisyUI secondary color
-                    borderColor: 'hsl(var(--s))',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }
-                }
-            }
-        });
+        const monthlyLabels = JSON.parse('{{ monthly_chart_labels|escapejs|default:"[]" }}');
+        const monthlyRevenue = JSON.parse('{{ monthly_chart_revenue|escapejs|default:"[]" }}');
+        // ... (rest of monthly chart init)
+        new Chart(monthlyCtx, {type: 'bar',data: {labels: monthlyLabels,datasets: [{label: 'Monthly Revenue (Rs)',data: monthlyRevenue,backgroundColor: 'hsl(var(--s))',borderColor: 'hsl(var(--s))',borderWidth: 1}]},options: {responsive: true,maintainAspectRatio: false,scales: {y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }}}});
     }
 });
 </script>

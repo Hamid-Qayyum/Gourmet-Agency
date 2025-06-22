@@ -1,10 +1,10 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import AddProduct,ProductDetail,Sale, Vehicle, Shop
+from .models import AddProduct,ProductDetail,Sale, Vehicle, Shop,SalesTransaction,SalesTransactionItem
 from decimal import Decimal
 from django.core.validators import MinValueValidator
-
+from django.forms import modelformset_factory
 
 
 
@@ -133,6 +133,184 @@ class ProductDetailForm(forms.ModelForm):
     
 
 
+
+class AddItemToSaleForm(forms.Form):
+    """Form to add a single product batch and its quantity to the current sale."""
+    product_detail_batch = forms.ModelChoiceField(
+        queryset=ProductDetail.objects.none(), # Populated based on the user in the view
+        label="Select Product Batch",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'add_item_product_batch_select'})
+    )
+    
+    # Readonly display fields (populated by JS)
+    available_stock_display = forms.CharField(label="Stock (MasterUnits.Items)", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered input-sm w-full bg-base-200', 'id': 'add_item_available_stock'}))
+    total_items_available_display = forms.CharField(label="Total Items Available", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered input-sm w-full bg-base-200', 'id': 'add_item_total_items'}))
+    cost_price_display = forms.CharField(label="Your Cost/Item", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered input-sm w-full bg-base-200', 'id': 'add_item_cost_price'}))
+
+    # User inputs for this item
+    quantity_to_add = forms.DecimalField(
+        label="Quantity to Add (e.g., 1.1 for 1 Carton + 1 Item)",
+        max_digits=10, decimal_places=1,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        initial=Decimal('0.1'),
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.1'})
+    )
+    selling_price_per_item = forms.DecimalField(
+        label="Selling Price per INDIVIDUAL Item for this batch",
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_selling_price', 'step': '0.01'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['product_detail_batch'].queryset = ProductDetail.objects.filter(
+                user=user, stock__gt=Decimal('0.0') # Only show batches with stock
+            ).select_related('product_base').order_by('product_base__name', 'expirey_date')
+            self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
+        self.fields['product_detail_batch'].empty_label = "--- Select Product Batch to Add ---"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        product_detail_batch = cleaned_data.get('product_detail_batch')
+        quantity_to_add_decimal = cleaned_data.get('quantity_to_add')
+
+        if product_detail_batch and quantity_to_add_decimal:
+            # Convert decimal quantity (e.g., 1.1) to total individual items
+            items_per_mu = product_detail_batch.items_per_master_unit
+            if not (items_per_mu and items_per_mu > 0):
+                 self.add_error('product_detail_batch', "Selected product has invalid configuration.")
+                 return cleaned_data
+
+            full_units_to_add = int(quantity_to_add_decimal)
+            decimal_part_items_to_add = int(round((quantity_to_add_decimal % 1) * Decimal('10.0')))
+            total_individual_items_being_added = (full_units_to_add * items_per_mu) + decimal_part_items_to_add
+
+            if total_individual_items_being_added <= 0:
+                self.add_error('quantity_to_add', "Quantity must result in at least one item.")
+            
+            # Check against ProductDetail's total_items_in_stock property
+            if hasattr(product_detail_batch, 'total_items_in_stock'):
+                if total_individual_items_being_added > product_detail_batch.total_items_in_stock:
+                    self.add_error('quantity_to_add', 
+                                   f"Not enough. Adding {quantity_to_add_decimal} ({total_individual_items_being_added} items), but only {product_detail_batch.total_items_in_stock} items available.")
+            else:
+                self.add_error(None, "Stock verification error on ProductDetail model.")
+        return cleaned_data
+
+
+class FinalizeSaleForm(forms.Form):
+    """Form for final details when completing a sale with multiple items."""
+    customer_shop = forms.ModelChoiceField(
+        queryset=Shop.objects.none(), required=False, label="Select Registered Shop (Optional)",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
+    )
+    customer_name_manual = forms.CharField(
+        max_length=200, required=False, label="Or Enter Customer Name",
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g., John Doe'})
+    )
+    payment_type = forms.ChoiceField(
+        choices=SalesTransaction.PAYMENT_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
+    )
+    needs_vehicle = forms.BooleanField(
+        required=False, label="Assign Vehicle for Delivery?",
+        widget=forms.CheckboxInput(attrs={'class': 'checkbox checkbox-primary', 'id': 'finalize_sale_needs_vehicle'})
+    )
+    assigned_vehicle = forms.ModelChoiceField(
+        queryset=Vehicle.objects.none(), required=False, label="Assign Vehicle",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'finalize_sale_assigned_vehicle'})
+    )
+    notes = forms.CharField(widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full h-20', 'placeholder': 'Optional notes for the entire sale...'}), required=False)
+
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['customer_shop'].queryset = Shop.objects.filter(user=user).order_by('name') # Or global if applicable
+            self.fields['assigned_vehicle'].queryset = Vehicle.objects.filter(user=user, is_active=True).order_by('vehicle_number')
+        self.fields['customer_shop'].empty_label = "--- Select Registered Shop ---"
+        self.fields['assigned_vehicle'].empty_label = "--- Select Vehicle (If Needed) ---"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        customer_shop = cleaned_data.get('customer_shop')
+        customer_name_manual = cleaned_data.get('customer_name_manual')
+        needs_vehicle = cleaned_data.get('needs_vehicle')
+        assigned_vehicle = cleaned_data.get('assigned_vehicle')
+
+        if not customer_shop and not customer_name_manual:
+            self.add_error('customer_shop', "Please select a shop or enter a customer name.")
+        if needs_vehicle and not assigned_vehicle:
+            self.add_error('assigned_vehicle', "Please assign a vehicle if delivery is needed.")
+        return cleaned_data
+
+
+class SalesTransactionItemReturnForm(forms.ModelForm):
+    """Form for a single SalesTransactionItem to input returned quantity."""
+    # Make product display read-only for context
+    product_display = forms.CharField(
+        label="Product Batch",
+        required=False, # Not part of model, just for display
+        widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-sm input-bordered w-full bg-base-200'})
+    )
+    dispatched_quantity_display = forms.CharField(
+        label="Qty Dispatched",
+        required=False,
+        widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-sm input-bordered w-full bg-base-200'})
+    )
+
+    class Meta:
+        model = SalesTransactionItem
+        fields = ['returned_quantity_decimal'] # Only this field is editable
+        widgets = {
+            'returned_quantity_decimal': forms.NumberInput(attrs={
+                'class': 'input input-sm input-bordered w-full',
+                'step': '0.1',
+                'min': '0.0' # Client-side validation
+            })
+        }
+        labels = {
+            'returned_quantity_decimal': 'Quantity Returned (e.g., 0.2)'
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields['product_display'].initial = f"{self.instance.product_detail_snapshot.product_base.name} (Exp: {self.instance.expiry_date_at_sale.strftime('%d-%b-%y')})"
+            self.fields['dispatched_quantity_display'].initial = str(self.instance.quantity_sold_decimal)
+            # Set max value for returned quantity based on dispatched quantity for this item
+            self.fields['returned_quantity_decimal'].widget.attrs['max'] = str(self.instance.quantity_sold_decimal)
+        
+        # Reorder fields if needed
+        field_order = ['product_display', 'dispatched_quantity_display', 'returned_quantity_decimal']
+        self.order_fields(field_order)
+
+
+    def clean_returned_quantity_decimal(self):
+        returned_qty = self.cleaned_data.get('returned_quantity_decimal')
+        if returned_qty is None: # If field was optional and left blank
+            returned_qty = Decimal('0.0')
+        
+        if self.instance and self.instance.pk: # Ensure instance exists (it should for an update)
+            dispatched_qty = self.instance.quantity_sold_decimal
+            if returned_qty > dispatched_qty:
+                raise forms.ValidationError(f"Returned quantity ({returned_qty}) cannot exceed dispatched quantity ({dispatched_qty}) for this item.")
+            if returned_qty < Decimal('0.0'):
+                raise forms.ValidationError("Returned quantity cannot be negative.")
+        return returned_qty
+
+# Create a FormSet based on the SalesTransactionItemReturnForm
+# We will typically instantiate this in the view with a queryset of items for a specific transaction
+SalesTransactionItemReturnFormSet = modelformset_factory(
+    SalesTransactionItem, 
+    form=SalesTransactionItemReturnForm, 
+    extra=0, # Don't show extra blank forms
+    can_delete=False # We are not deleting items here, only updating return quantity
+)
 
 
 class SaleForm(forms.Form): # Not a ModelForm because of dynamic/conditional fields
