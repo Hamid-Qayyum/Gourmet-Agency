@@ -135,94 +135,143 @@ class ProductDetailForm(forms.ModelForm):
 
 
 
-class SaleForm(forms.Form):
-
+class SaleForm(forms.Form): # Not a ModelForm because of dynamic/conditional fields
     product_detail_batch = forms.ModelChoiceField(
-        queryset=ProductDetail.objects.none(), # To be populated based on the user
+        queryset=ProductDetail.objects.none(), 
         label="Select Product Batch",
         widget=forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'sale_form_product_batch'})
-        )
-    name_of_customer = forms.CharField(
-        max_length=200,
+    )
+    # Customer selection: Shop or Manual Name
+    customer_shop = forms.ModelChoiceField(
+        queryset=Shop.objects.none(), # To be populated based on user if shops are user-specific
         required=False,
-        label="Customer Name (Optional)",
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'Enter customer name'})
+        label="Select Registered Shop (Optional)",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'sale_form_customer_shop'})
+    )
+    customer_name_manual = forms.CharField(
+        max_length=200, required=False, label="Or Enter Customer Name",
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g., John Doe or Local Store'})
     )
 
-    # "stock = auto_filled (from product_detail)" - Display only field
-    current_stock_display = forms.CharField(
-        label="Current Stock (Master Units)",
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'readonly': True, 'id': 'sale_form_current_stock'})
-    )
+    # Readonly display fields (populated by JS)
+    current_stock_display = forms.CharField(label="Current Stock", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered w-full bg-base-200', 'id': 'sale_form_current_stock'}))
+    total_items_available_display = forms.CharField(label="Total Items Available", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered w-full bg-base-200', 'id': 'sale_form_total_items'}))
+    cost_price_display = forms.CharField(label="Your Cost/Item", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered w-full bg-base-200', 'id': 'sale_form_cost_price'}))
 
-    # "number_of_items = auto_filled (from product_detail)" - Display only field (total individual items)
-    total_items_available_display = forms.CharField(
-        label="Total Individual Items Available",
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'readonly': True, 'id': 'sale_form_total_items'})
-    )
-
-    # "price_of_eact_product = auto_filled(product_detail)" - This is your cost price. Display only.
-    cost_price_display = forms.CharField(
-        label="Your Cost Price per Item",
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'readonly': True, 'id': 'sale_form_cost_price'})
-    )
-    
-    # "number_of_products_to_sell= float field" - Changed to IntegerField for items
-    quantity_items_to_sell = forms.DecimalField(
-        max_digits=10,
-        decimal_places=1,
+    quantity_to_sell = forms.DecimalField(
+        label="Quantity to Sell (e.g., 1.1 for 1 Carton, 1 Item)",
+        max_digits=10, decimal_places=1,
         validators=[MinValueValidator(Decimal('0.1'))],
-        label="Number of Items to Sell",
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g., 1.1 or 2.5'})
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'sale_form_quantity_to_sell', 'step': '0.1'})
     )
-
-    # "selling_price_of_eact_product = float field" - Changed to DecimalField
     selling_price_per_item = forms.DecimalField(
-        label="Selling Price per Item",
-        max_digits=10,
-        decimal_places=2,
+        label="Selling Price per INDIVIDUAL Item",
+        max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g., 12.50', 'step': '0.01'})
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'sale_form_selling_price', 'step': '0.01'})
+    )
+    payment_type = forms.ChoiceField(
+        choices=Sale.PAYMENT_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
+    )
+    needs_vehicle = forms.BooleanField(
+        required=False, 
+        label="Assign Vehicle for Delivery?",
+        widget=forms.CheckboxInput(attrs={'class': 'checkbox checkbox-primary', 'id': 'sale_form_needs_vehicle'})
+    )
+    assigned_vehicle = forms.ModelChoiceField(
+        queryset=Vehicle.objects.none(), # Populated based on user
+        required=False, # Only required if needs_vehicle is checked (handled in JS/view)
+        label="Assign Vehicle",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'sale_form_assigned_vehicle'})
     )
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None) # Get the user passed from the view
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
         if user:
-            # Populate the product_detail_batch choices for product details
-            # owned by the user and having stock > 0.
             self.fields['product_detail_batch'].queryset = ProductDetail.objects.filter(
-                user=user, 
-                stock__gt=Decimal('0.0') # Only show batches with some stock
+                user=user, stock__gt=Decimal('0.0')
             ).select_related('product_base').order_by('product_base__name', 'expirey_date')
+            self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
             
-            # Customize how each choice is displayed in the dropdown
-            self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock} {obj.product_base.name}s)"
+            # Assuming shops and vehicles are also user-specific. If global, remove user filter.
+            self.fields['customer_shop'].queryset = Shop.objects.filter(user=user).order_by('name')
+            self.fields['assigned_vehicle'].queryset = Vehicle.objects.filter(user=user, is_active=True).order_by('vehicle_number')
         
-        self.fields['product_detail_batch'].empty_label = "--- Select Product ---"
+        self.fields['product_detail_batch'].empty_label = "--- Select Product Batch ---"
+        self.fields['customer_shop'].empty_label = "--- Select Registered Shop (Optional) ---"
+        self.fields['assigned_vehicle'].empty_label = "--- Select Vehicle (If Needed) ---"
 
     def clean(self):
         cleaned_data = super().clean()
         product_detail_batch = cleaned_data.get('product_detail_batch')
-        quantity_items_to_sell = cleaned_data.get('quantity_items_to_sell')
+        quantity_to_sell_decimal = cleaned_data.get('quantity_to_sell')
+        needs_vehicle = cleaned_data.get('needs_vehicle')
+        assigned_vehicle = cleaned_data.get('assigned_vehicle')
+        customer_shop = cleaned_data.get('customer_shop')
+        customer_name_manual = cleaned_data.get('customer_name_manual')
 
-        if product_detail_batch and quantity_items_to_sell:
-            # Ensure quantity to sell does not exceed available individual items
-            # Relies on ProductDetail having a property `total_items_in_stock`
-            if hasattr(product_detail_batch, 'total_items_in_stock'):
-                available_items = product_detail_batch.total_items_in_stock
-                if quantity_items_to_sell > available_items:
-                    self.add_error('quantity_items_to_sell', 
-                                   f"Not enough items in stock. Only {available_items} individual items available for this batch.")
-            else:
-                self.add_error(None, "Could not verify stock levels due to missing information on ProductDetail model.")   
+        if not customer_shop and not customer_name_manual:
+            self.add_error('customer_shop', "Either select a registered shop or enter a customer name.")
+            self.add_error('customer_name_manual', " ") # Add to both for visibility
+
+        if product_detail_batch and quantity_to_sell_decimal:
+            items_per_mu = product_detail_batch.items_per_master_unit
+            if not (items_per_mu and items_per_mu > 0):
+                 self.add_error('product_detail_batch', "Selected product has invalid configuration (items per master unit).")
+                 return cleaned_data # Stop further validation for this field
+
+            full_units_to_sell = int(quantity_to_sell_decimal)
+            decimal_part_items_to_sell = int(round((quantity_to_sell_decimal % 1) * Decimal('10.0')))
+            total_individual_items_being_sold = (full_units_to_sell * items_per_mu) + decimal_part_items_to_sell
+            
+            if total_individual_items_being_sold <= 0:
+                self.add_error('quantity_to_sell', "Quantity to sell must result in at least one item.")
+
+            if product_detail_batch.total_items_in_stock < total_individual_items_being_sold:
+                self.add_error('quantity_to_sell', 
+                               f"Not enough items. Selling {quantity_to_sell_decimal} ({total_individual_items_being_sold} items), but only {product_detail_batch.total_items_in_stock} items available.")
+        
+        if needs_vehicle and not assigned_vehicle:
+            self.add_error('assigned_vehicle', "Please assign a vehicle if delivery is needed.")
+            
         return cleaned_data
     
 
+class ProcessReturnForm(forms.Form):
+    returned_stock_decimal = forms.DecimalField(
+        label="Quantity Returned (e.g., 0.2 for 2 items)",
+        max_digits=10,
+        decimal_places=1,
+        required=False, # Can be zero if all items were delivered and none returned
+        initial=Decimal('0.0'),
+        validators=[MinValueValidator(Decimal('0.0'))], # Allow 0
+        widget=forms.NumberInput(attrs={
+            'class': 'input input-bordered w-full',
+            'step': '0.1',
+            'placeholder': 'e.g., 0.0 or 0.3'
+        }),
+        help_text="Enter in 'Carton.Item' format, e.g., 0.2 for 2 items if 1 carton has >2 items."
+    )
+    # You could add a notes field for the return here if needed
+    # return_notes = forms.CharField(widget=forms.Textarea, required=False)
+
+    def __init__(self, *args, **kwargs):
+        self.sale_instance = kwargs.pop('sale_instance', None) # Pass the Sale instance
+        super().__init__(*args, **kwargs)
+
+    def clean_returned_stock_decimal(self):
+        returned_quantity = self.cleaned_data.get('returned_stock_decimal')
+        
+        if returned_quantity is None: # If not required and left blank
+            return Decimal('0.0') 
+            
+        if self.sale_instance and returned_quantity > self.sale_instance.quantity_sold_decimal:
+            raise forms.ValidationError(
+                f"Returned quantity ({returned_quantity}) cannot exceed dispatched quantity ({self.sale_instance.quantity_sold_decimal})."
+            )
+        return returned_quantity
 
 
 # vehicle form.......

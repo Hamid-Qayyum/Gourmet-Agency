@@ -22,8 +22,17 @@ urlpatterns = [
    path('product-details/update/<int:pk>/', views.product_detail_update_view, name='product_detail_update'),
 
    #views about sales.................
-   path('sales/', views.sales, name="sales"),
+   path('sales/', views.sales_processing_view, name="sales"),
    path('sales/ajax/get-batch-info/<int:pk>/', views.ajax_get_batch_details_for_sale, name='ajax_get_batch_info_for_sale'),
+   path('sales/pending-deliveries/', views.pending_deliveries_view, name='pending_deliveries'),
+   path('sales/process-delivery/<int:sale_pk>/', views.process_delivery_return_view, name='process_delivery_return'),
+   path('reports/sales/', views.sales_report_view, name='sales_report'),
+
+
+   # Recpiy view ...........
+   path('sales/receipt/<int:sale_pk>/', views.sale_receipt_view, name='sale_receipt'),
+
+
 
 
    # URL for managing vehicles............
@@ -36,8 +45,11 @@ urlpatterns = [
    # URLs for managing shops...............
    path('shops/', views.manage_shops_view, name='manage_shops'),
    path('shops/delete/<int:shop_pk>/', views.delete_shop_action_view, name='delete_shop_action'),
-    path('shops/ajax/get-data/<int:shop_pk>/', views.ajax_get_shop_data, name='ajax_get_shop_data'),
-    path('shops/update/<int:shop_pk>/', views.shop_update_action_view, name='shop_update_action'),
+   path('shops/ajax/get-data/<int:shop_pk>/', views.ajax_get_shop_data, name='ajax_get_shop_data'),
+   path('shops/update/<int:shop_pk>/', views.shop_update_action_view, name='shop_update_action'),
+   path('sales/by-shop/', views.list_shops_for_sales_view, name='list_shops_for_sales'),
+   path('sales/shop-history/<int:shop_pk>/', views.shop_purchase_history_view, name='shop_purchase_history'),
+
 
 
    # auth views............

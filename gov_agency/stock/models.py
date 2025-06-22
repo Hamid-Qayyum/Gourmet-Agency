@@ -116,6 +116,44 @@ class ProductDetail(models.Model):
         self.save(update_fields=['stock'])
         return True
     
+    def increase_stock(self, quantity_to_add_decimal: Decimal) -> bool:
+        """
+        Increases stock by a decimal amount representing master_units.items (e.g., returned stock).
+        e.g., quantity_to_add_decimal = 0.2 means 2 items are being added back.
+        Returns True if successful.
+        """
+        if not isinstance(quantity_to_add_decimal, Decimal) or quantity_to_add_decimal < Decimal('0.0'):
+            # Allow adding 0 stock (no return), but not negative.
+            if quantity_to_add_decimal == Decimal('0.0'):
+                return True # No change, but operation is "successful"
+            return False # Invalid quantity
+
+        # Convert quantity_to_add_decimal into total individual items to add
+        if self.items_per_master_unit is None or self.items_per_master_unit <= 0:
+            return False # Cannot process without items_per_master_unit
+
+        full_master_units_to_add = int(quantity_to_add_decimal)
+        # Assumes .1 = 1 item, .2 = 2 items etc. for the decimal part
+        decimal_part_as_items_to_add = int(round((quantity_to_add_decimal % 1) * Decimal('10.0')))
+        total_individual_items_to_add = (full_master_units_to_add * self.items_per_master_unit) + decimal_part_as_items_to_add
+
+        if total_individual_items_to_add < 0: # Should be caught by earlier check but as a safeguard
+            return False
+
+        # Convert current stock to total items, add new items, then convert back to decimal stock format
+        current_total_items = self.total_items_in_stock
+        new_total_items = current_total_items + total_individual_items_to_add
+
+        # Convert new_total_items back to your decimal 'stock' representation
+        new_full_master_units = new_total_items // self.items_per_master_unit
+        remaining_loose_items = new_total_items % self.items_per_master_unit
+        
+        new_stock_decimal_part = Decimal(remaining_loose_items) / Decimal('10.0') # e.g. 7 items -> 0.7
+        
+        self.stock = Decimal(new_full_master_units) + new_stock_decimal_part
+        self.save(update_fields=['stock'])
+        return True
+    
 
     def sell_one_item(self):
         if self.stock % 1 == 0:
@@ -133,93 +171,143 @@ class ProductDetail(models.Model):
         return f"{self.stock} cartons"
     
 
-class Sale(models.Model):
+class Sale(models.Model): # Renamed from SaleRecord if you prefer
+    PAYMENT_TYPE_CHOICES = [
+        ('CASH', 'Cash on Hand'),
+        ('ONLINE', 'Online Transfer'),
+        ('CREDIT', 'Credit/Account'),
+    ]
+    SALE_STATUS_CHOICES = [
+        ('PENDING_DELIVERY', 'Pending Delivery'),
+        ('COMPLETED', 'Completed'),
+        ('PARTIALLY_RETURNED', 'Partially Returned'), # If some items came back
+        ('FULLY_RETURNED', 'Fully Returned'), # If all items came back
+        ('CANCELLED', 'Cancelled'),
+    ]
 
-    name_of_customer = models.CharField(null=False, max_length=100, blank=False , default="Not Provided")
-    """
-    Represents a single sale transaction based on the user's diagram.
-    """
-    product_detail_snapshot = models.ForeignKey('ProductDetail', on_delete=models.CASCADE,related_name='sales_records',
-    help_text="The specific product detail (batch) that was sold.")
-
-    # "expiry = foreignkey(product_detail)" - Stored at time of sale, copied from product_detail_snapshot
-    expiry_date_at_sale = models.DateField(
-        help_text="Expiry date of the product batch at the time of sale."
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="recorded_sales")
+    product_detail_snapshot = models.ForeignKey(
+        'ProductDetail',
+        on_delete=models.PROTECT,
+        related_name='sales_records',
+        help_text="The specific product detail (batch) that was sold."
     )
-    stock_before_sale = models.DecimalField(max_digits=10, decimal_places=1,
-    help_text="Stock level of the product_detail (in master units) just before this sale transaction.")
-
-    items_per_master_unit_at_sale = models.PositiveIntegerField(
-    help_text="Items per master unit for the sold product batch at the time of sale.")
-
-    cost_price_per_item_at_sale = models.DecimalField(max_digits=10, decimal_places=2,
-    help_text="Your cost for one individual item of this product at the time of sale.")
-
-    quantity_items_sold =  models.DecimalField(max_digits=10, decimal_places=1,validators=[MinValueValidator(Decimal('0.1'))],default=0.0,
-    help_text="Quantity sold in 'master_unit.item' format (e.g., 1.1 for 1 carton and 1 item).")
-
-    selling_price_per_item = models.DecimalField(max_digits=10, decimal_places=2,validators=[MinValueValidator(Decimal('0.01'))],
-    help_text="The price each individual item was sold to the customer for.")
+    # Changed from name_of_customer to a ForeignKey to Shop
+    customer_shop = models.ForeignKey(
+        'Shop',
+        on_delete=models.SET_NULL, # If shop is deleted, sale record remains, shop becomes NULL
+        null=True,
+        blank=True, # Sale might not always be to a registered shop
+        related_name='purchases',
+        help_text="The shop that made the purchase, if applicable."
+    )
+    # Fallback if not a registered shop, or for individual customers
+    customer_name_manual = models.CharField(max_length=200, blank=True, null=True, help_text="Customer name if not a registered shop.")
 
 
-    user = models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True,related_name='recorded_sales')
+    quantity_sold_decimal = models.DecimalField( # e.g., 1.1 for 1 carton + 1 item
+        max_digits=10, decimal_places=1, default=0.0,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        help_text="Quantity dispatched in 'master_unit.item' format."
+    )
+    selling_price_per_item = models.DecimalField( # Price per individual item
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    
+    # Snapshot fields (populated in save or view)
+    expiry_date_at_sale = models.DateField()
+    stock_before_sale = models.DecimalField(max_digits=10, decimal_places=1)
+    items_per_master_unit_at_sale = models.PositiveIntegerField()
+    cost_price_per_item_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # New fields for this phase
+    needs_vehicle = models.BooleanField(default=False)
+    assigned_vehicle = models.ForeignKey(
+        'Vehicle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True, # Vehicle only assigned if needs_vehicle is True
+        related_name='deliveries'
+    )
+    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, default='CASH')
+    status = models.CharField(max_length=20, choices=SALE_STATUS_CHOICES, default='COMPLETED') # Default might change based on needs_vehicle
+
+    returned_stock_decimal = models.DecimalField( # e.g., 0.2 for 2 items returned
+        max_digits=10, decimal_places=1,
+        null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.0'))], # Can be 0
+        help_text="Quantity returned by customer in 'master_unit.item' format."
+    )
+
+    # Calculated fields
+    total_revenue_dispatch = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00')) # Based on quantity_sold_decimal
+    total_cost_dispatch = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))    # Based on quantity_sold_decimal
+    # Profit will be a property that considers returns
+
     sale_time = models.DateTimeField(default=timezone.now)
 
-    total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
-    def __str__(self):
-        return f"Sale of {self.quantity_items_sold} x {self.product_detail_snapshot.product_base.name} on {self.sale_time.strftime('%Y-%m-%d')}"
-
-
-    def _get_total_individual_items_from_decimal_quantity(self, decimal_quantity: Decimal) -> int:
-        """Helper to convert 1.1 (1 carton, 1 item) to total individual items."""
-        if self.items_per_master_unit_at_sale is None or self.items_per_master_unit_at_sale <= 0:
-            if self.product_detail_snapshot and self.product_detail_snapshot.items_per_master_unit:
-                items_per_mu = self.product_detail_snapshot.items_per_master_unit
-            else:
-                return int(round(decimal_quantity * 10)) # Fallback to assuming .1 is 1 item always
-        else:
-            items_per_mu = self.items_per_master_unit_at_sale
-
+    def _get_total_individual_items_from_decimal(self, decimal_quantity: Decimal, items_per_mu: int) -> int:
+        """Helper to convert X.Y decimal to total individual items."""
+        if decimal_quantity is None or items_per_mu is None or items_per_mu <= 0:
+            return 0
         full_units = int(decimal_quantity)
+        # Assumes .1 = 1 item, .2 = 2 items, etc. (fractional part is base-10 for items)
         decimal_part_items = int(round((decimal_quantity % 1) * Decimal('10.0')))
         return (full_units * items_per_mu) + decimal_part_items
-    
 
     @property
-    def total_individual_items_sold_in_transaction(self):
-        return self._get_total_individual_items_from_decimal_quantity(self.quantity_items_sold)
-    
+    def dispatched_individual_items_count(self):
+        return self._get_total_individual_items_from_decimal(self.quantity_sold_decimal, self.items_per_master_unit_at_sale)
 
     @property
-    def calculated_profit(self):
-        if self.total_revenue is not None and self.total_cost is not None:
-            return self.total_revenue - self.total_cost
-        return Decimal('0.00')
+    def returned_individual_items_count(self):
+        if self.returned_stock_decimal is None:
+            return 0
+        return self._get_total_individual_items_from_decimal(self.returned_stock_decimal, self.items_per_master_unit_at_sale)
+
+    @property
+    def actual_sold_individual_items_count(self):
+        return self.dispatched_individual_items_count - self.returned_individual_items_count
+        
+    @property
+    def final_total_revenue(self):
+        return Decimal(self.actual_sold_individual_items_count) * self.selling_price_per_item
+
+    @property
+    def final_total_cost(self):
+        return Decimal(self.actual_sold_individual_items_count) * self.cost_price_per_item_at_sale
+
+    @property
+    def final_profit(self):
+        return self.final_total_revenue - self.final_total_cost
 
     def save(self, *args, **kwargs):
-        # Populate snapshot fields if creating a new sale and product_detail_snapshot is set
-        if not self.pk and self.product_detail_snapshot: # If new instance and product_detail is linked
+        # Populate snapshot fields from product_detail_snapshot if it's a new sale
+        if not self.pk and self.product_detail_snapshot:
             self.expiry_date_at_sale = self.product_detail_snapshot.expirey_date
-            self.stock_before_sale = self.product_detail_snapshot.stock # Stock before this sale's deduction
+            # stock_before_sale should be set in the view just before decrementing stock
             self.items_per_master_unit_at_sale = self.product_detail_snapshot.items_per_master_unit
             self.cost_price_per_item_at_sale = self.product_detail_snapshot.price_per_item
 
-        # Calculate totals
-        if self.quantity_items_sold and self.selling_price_per_item:
-            total_individual_items_sold_count = self._get_total_individual_items_from_decimal_quantity(self.quantity_items_sold)
-
-            self.total_revenue = Decimal(total_individual_items_sold_count) * self.selling_price_per_item
-        if self.quantity_items_sold and self.cost_price_per_item_at_sale:
-            self.total_cost = Decimal(total_individual_items_sold_count) * self.cost_price_per_item_at_sale
+        # Calculate totals based on dispatched quantity (initial sale)
+        dispatched_items_count = self._get_total_individual_items_from_decimal(
+            self.quantity_sold_decimal or Decimal('0.0'), 
+            self.items_per_master_unit_at_sale or self.product_detail_snapshot.items_per_master_unit # Fallback
+        )
+        self.total_revenue_dispatch = dispatched_items_count * (self.selling_price_per_item or Decimal('0.0'))
+        self.total_cost_dispatch = dispatched_items_count * (self.cost_price_per_item_at_sale or Decimal('0.0'))
         
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        shop_name = self.customer_shop.name if self.customer_shop else self.customer_name_manual or "Walk-in Customer"
+        return f"Sale of {self.quantity_sold_decimal} of {self.product_detail_snapshot.product_base.name} to {shop_name} on {self.sale_time.strftime('%Y-%m-%d')}"
+
     class Meta:
         ordering = ['-sale_time']
-        verbose_name = "Sale Record"
-        verbose_name_plural = "Sale Records"
+
 
 
 # vehical  model 

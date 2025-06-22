@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Purchase History for {{ shop.name }}{% endblock %}
+{% block page_title %}Sales to: {{ shop.name }}{% endblock %}
+
+{% block extra_head %}{{block.super}}
+<style> .table th, .table td { font-size: 0.875rem; padding: 0.5rem; } </style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h1 class="text-2xl font-bold">Purchase History: {{ shop.name }}</h1>
+            <p class="text-sm text-base-content/70">{{ shop.location_address|default:"" }}</p>
+        </div>
+        <a href="{% url 'stock:list_shops_for_sales' %}" class="btn btn-sm btn-outline">← Back to Shops List</a>
+    </div>
+    
+    <div class="stats shadow mb-6 bg-base-100">
+        <div class="stat">
+            <div class="stat-title">Total Sales Value</div>
+            <div class="stat-value text-primary">Rs {{ shop_total_sales_value|floatformat:2 }}</div>
+            <div class="stat-desc">Based on dispatched items</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Total Estimated Profit</div>
+            <div class="stat-value {% if shop_total_profit > 0 %}text-success{% elif shop_total_profit < 0 %}text-error{% else %}text-secondary{% endif %}">
+                Rs {{ shop_total_profit|floatformat:2 }}
+            </div>
+            <div class="stat-desc">Based on final sales after returns</div>
+        </div>
+    </div>
+
+
+    {% if shop_sales %}
+        <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
+            <table class="table table-sm w-full">
+                <thead>
+                    <tr>
+                        <th>Sale ID</th>
+                        <th>Date/Time</th>
+                        <th>Product Batch</th>
+                        <th class="text-center">Qty Disp.</th>
+                        <th class="text-right">Sale Price/Item</th>
+                        <th class="text-right">Total Revenue (Disp.)</th>
+                        <th class="text-right">Final Profit</th>
+                        <th>Payment</th>
+                        <th>Delivery</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in shop_sales %}
+                    <tr>
+                        <td>#{{sale.pk}}</td>
+                        <td class="text-xs whitespace-nowrap">{{ sale.sale_time|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {{ sale.product_detail_snapshot.product_base.name }}
+                            <span class="block text-xs text-neutral-content">(Exp: {{ sale.expiry_date_at_sale|date:"d M Y" }})</span>
+                        </td>
+                        <td class="text-center">{{ sale.quantity_sold_decimal }}</td>
+                        <td class="text-right">Rs {{ sale.selling_price_per_item|floatformat:2 }}</td>
+                        <td class="text-right font-semibold">Rs {{ sale.total_revenue_dispatch|floatformat:2 }}</td>
+                        <td class="text-right font-bold {% if sale.final_profit > 0 %}text-success{% elif sale.final_profit < 0 %}text-error{% endif %}">
+                            Rs {{ sale.final_profit|floatformat:2 }}
+                        </td>
+                        <td><span class="badge badge-sm badge-outline">{{ sale.get_payment_type_display }}</span></td>
+                        <td>
+                            {% if sale.needs_vehicle and sale.assigned_vehicle %}
+                                <span class="badge badge-sm badge-info">{{ sale.assigned_vehicle.vehicle_number }}</span>
+                            {% elif sale.needs_vehicle %}
+                                <span class="badge badge-sm badge-warning">Vehicle Needed</span>
+                            {% else %}
+                                <span class="text-xs text-base-content/70">No Vehicle</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                             <span class="badge badge-sm 
+                                {% if sale.status == 'COMPLETED' %}badge-success
+                                {% elif sale.status == 'PENDING_DELIVERY' %}badge-warning
+                                {% elif sale.status == 'CANCELLED' %}badge-error
+                                {% elif sale.status == 'PARTIALLY_RETURNED' or sale.status == 'FULLY_RETURNED' %}badge-accent
+                                {% else %}badge-ghost{% endif %}">
+                                {{ sale.get_status_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-center text-base-content/70 py-8">No sales recorded for {{ shop.name }} yet.</p>
+    {% endif %}
+</div>
+{% endblock %}
