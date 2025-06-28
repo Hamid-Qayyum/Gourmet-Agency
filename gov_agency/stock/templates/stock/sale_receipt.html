@@ -35,9 +35,9 @@
 <body>
     <div class="receipt-container">
         <header>
-            <h1>{{ company_name|default:"Your Company" }}</h1>
-            <p>{{ company_address|default:"123 Store St, City" }}</p>
-            <p>Phone: {{ company_phone|default:"(555) 123-4567" }}</p>
+            <h1>{{ company_name|default:"Clasic Traders" }}</h1>
+            <p>{{ company_address|default:"Diniapur" }}</p>
+            <p>Phone: {{ company_phone|default:"03346414137" }}</p>
             <p style="font-weight: bold; margin-top: 5px;">SALES RECEIPT</p>
         </header>
 
@@ -75,7 +75,6 @@
                         <span class="description">
                             {{ item.product_detail_snapshot.packing_type }}
                             ({{ item.product_detail_snapshot.quantity_in_packing|floatformat:"-2g" }} {{ item.product_detail_snapshot.unit_of_measure }})
-                            <br>Exp: {{ item.expiry_date_at_sale|date:"d M Y" }}
                             {% if item.returned_quantity_decimal > 0 %}
                                 <br><strong style="color: red;">Returned: {{ item.returned_quantity_decimal }}</strong>
                             {% endif %}
@@ -134,7 +133,6 @@
         <hr class="dashed">
         <footer>
             <p>Thank you for your business!</p>
-            <p style="font-weight:bold; margin-top:5px;">Status: {{ transaction.get_status_display }}</p>
         </footer>
     </div>
 

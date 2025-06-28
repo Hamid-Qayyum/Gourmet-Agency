@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}All Sales Transactions{% endblock %}
+{% block page_title %}Sales Transaction History{% endblock %}
+
+{% block extra_head %}{{block.super}}
+<style>
+    .table th, .table td { font-size: 0.875rem; padding: 0.5rem; vertical-align: middle;}
+    .table .actions-cell { width: 80px; text-align: center;} /* For receipt button */
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">All Sales Transactions</h1>
+        <a href="{% url 'stock:sales' %}" class="btn btn-sm btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
+            New Sale
+        </a>
+    </div>
+
+    {% if transactions %}
+        <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
+            <table class="table table-sm w-full">
+                <thead>
+                    <tr>
+                        <th>Tx ID</th>
+                        <th>Date & Time</th>
+                        <th>Customer</th>
+                        <th>Products Sold</th>
+                        <th class="text-right">Total Revenue</th>
+                        <th class="text-right">Profit</th>
+                        <th>Payment</th>
+                         <th>Note</th>
+                        <th>Vehicle</th>
+                        <th>Status</th>
+                        <th class="actions-cell">Receipt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr class="hover">
+                        <td>{{ tx.pk }}</td>
+                        <td class="text-xs whitespace-nowrap">{{ tx.transaction_time|date:"Y-m-d H:i" }}</td>
+                        <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A"|truncatechars:25 }}</td>
+                        <td class="text-xs">
+                            {% for item in tx.items.all|slice:":2" %}
+                                {{ item.product_detail_snapshot.product_base.name|truncatechars:20 }}
+                                ({{ item.quantity_sold_decimal }})
+                                {% if not forloop.last %}<br>{% endif %}
+                            {% endfor %}
+                            {% if tx.items.all.count > 2 %}
+                            <a href="javascript:void(0);" onclick="openProductModal('{{ tx.pk }}')" class="italic text-blue-600 hover:underline">
+                            (+{{ tx.items.all.count|add:"-2" }} more)
+                            </a>
+                            {% endif %}
+                            {% if not tx.items.all %}
+                                <span class="italic text-base-content/60">No items</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right font-semibold whitespace-nowrap">Rs {{ tx.grand_total_revenue|floatformat:2|intcomma }}</td>
+                        <td class="text-right font-bold whitespace-nowrap {% if tx.calculated_grand_profit > 0 %}text-success{% elif tx.calculated_grand_profit < 0 %}text-error{% endif %}">
+                            Rs {{ tx.calculated_grand_profit|floatformat:2|intcomma }}
+                        </td>
+                        <td><span class="badge badge-sm badge-outline">{{ tx.get_payment_type_display }}</span></td>
+                        <td>
+                        <span 
+                            class="note cursor-pointer badge badge-sm badge-neutral" 
+                            data-note="{{ tx.notes|default_if_none:''}}" 
+                            data-tx-id="{{ tx.pk }}">
+                            Note
+                        </span>
+                        </td>                        
+                        <td>
+                            {% if tx.needs_vehicle and tx.assigned_vehicle %}
+                                <span class="badge badge-sm badge-info">{{ tx.assigned_vehicle.vehicle_number }}</span>
+                            {% elif tx.needs_vehicle %}
+                                <span class="badge badge-sm badge-warning">Needed</span>
+                            {% else %}
+                                <span class="text-xs text-base-content/70">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                             <span class="badge badge-sm 
+                                {% if tx.status == 'COMPLETED' %}badge-success
+                                {% elif tx.status == 'PENDING_DELIVERY' %}badge-warning
+                                {% elif tx.status == 'CANCELLED' %}badge-error
+                                {% elif tx.status == 'PARTIALLY_RETURNED' or tx.status == 'FULLY_RETURNED' %}badge-accent
+                                {% else %}badge-ghost{% endif %}">
+                                {{ tx.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="actions-cell">
+                             <a href="{% url 'stock:sale_receipt' sale_pk=tx.pk %}" 
+                               class="btn btn-xs btn-ghost btn-square" 
+                               target="_blank" title="View/Print Receipt">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Product Modal -->
+        <dialog id="productModal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <h3 class="font-bold text-lg mb-4">Products Sold</h3>
+            <div id="productModalContent" class="space-y-2 text-sm">
+            <!-- Products will be inserted here -->
+            </div>
+            <div class="modal-action">
+            <form method="dialog">
+                <button class="btn btn-sm">Close</button>
+            </form>
+            </div>
+        </div>
+        </dialog>
+
+            {% for tx in transactions %}
+                <div id="tx-{{ tx.pk }}-items" class="hidden">
+                    {% for item in tx.items.all %}
+                        <div>
+                            <strong>{{ item.product_detail_snapshot.product_base.name }}</strong>
+                            - {{ item.quantity_sold_decimal }} {{ item.product_detail_snapshot.unit_of_measure }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+
+
+        <!-- Note Modal -->
+        <input type="checkbox" id="note_modal" class="modal-toggle" />
+        <div class="modal" role="dialog">
+        <div class="modal-box w-full max-w-lg">
+            <h3 class="font-bold text-lg">View/Edit Note</h3>
+
+            <form method="post" action="{% url 'stock:update_note' %}" id="noteForm">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="all_transactions_list">
+            <input type="hidden" name="tx_id" id="note_tx_id">
+            <textarea id="note_text" name="note" class="textarea textarea-bordered w-full mt-4" readonly></textarea>
+
+            <div class="modal-action">
+                <label for="note_modal" class="btn">Close</label>
+                <button type="button" id="editNoteBtn" class="btn btn-warning">Edit</button>
+                <button type="submit" id="saveNoteBtn" class="btn btn-primary hidden">Save</button>
+            </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="note_modal">Close</label>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="join mt-8 flex justify-center">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">«</a>
+            {% else %}
+                <button class="join-item btn btn-sm btn-disabled">«</button>
+            {% endif %}
+            
+            {% for i in page_obj.paginator.page_range %}
+                {% if page_obj.number == i %}
+                    <button class="join-item btn btn-sm btn-active btn-primary">{{ i }}</button>
+                {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' %} 
+                    {# Show a few pages around the current page #}
+                    <a href="?page={{ i }}" class="join-item btn btn-sm">{{ i }}</a>
+                {% elif i == page_obj.number|add:'-3' or i == page_obj.number|add:'3' %}
+                     <button class="join-item btn btn-sm btn-disabled">...</button>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">»</a>
+            {% else %}
+                <button class="join-item btn btn-sm btn-disabled">»</button>
+            {% endif %}
+        </div>
+        {% endif %}
+
+    {% else %}
+        <p class="text-center text-base-content/70 py-8">No sales transactions found.</p>
+    {% endif %}
+</div>
+{% endblock %}
+{% block extra_scripts %}
+  {{ block.super }}
+  <script>
+    function openProductModal(txId) {
+        const container = document.getElementById(`tx-${txId}-items`);
+        const content = document.getElementById("productModalContent");
+        content.innerHTML = container ? container.innerHTML : "<p>No product info found.</p>";
+        document.getElementById("productModal").showModal();
+}
+document.addEventListener('DOMContentLoaded', function () {
+
+    const noteModalCheckbox = document.getElementById('note_modal');
+    const noteTextarea = document.getElementById('note_text');
+    const noteTxIdInput = document.getElementById('note_tx_id');
+    const editBtn = document.getElementById('editNoteBtn');
+    const saveBtn = document.getElementById('saveNoteBtn');
+    const noteForm = document.getElementById('noteForm');
+
+
+    document.querySelectorAll('.note').forEach(el =>  {
+        el.addEventListener('click', function() {
+            const note = el.dataset.note || '';
+            const txId = el.dataset.txId;
+
+            noteTextarea.value = note;
+            noteTxIdInput.value = txId;
+            noteTextarea.readOnly = true;
+
+            editBtn.classList.remove('hidden');
+            saveBtn.classList.add('hidden');
+
+            noteModalCheckbox.checked = true;
+        });
+    });
+
+    editBtn.addEventListener('click', function () {
+        noteTextarea.readOnly = false;
+        noteTextarea.focus();
+        editBtn.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+    });
+});
+</script>
+{% endblock %}

@@ -30,6 +30,8 @@
                         <th class="text-right">Total Revenue</th>
                         <th class="text-right">Total Profit</th>
                         <th>Payment</th>
+                        <th>Note</th>
+                        <th>Vehicle</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -37,19 +39,35 @@
                 <tbody>
                     {% for tx in shop_transactions %} {# Changed from sale to tx #}
                     <tr>
-                        <td>#{{ tx.pk }}</td>
+                        <td>{{ tx.pk }}</td>
                         <td class="text-xs">{{ tx.transaction_time|date:"Y-m-d H:i" }}</td>
                         <td class="text-xs">
                             {% for item in tx.items.all|slice:":2" %}
                                 {{ item.product_detail_snapshot.product_base.name }} ({{item.quantity_sold_decimal}})<br>
                             {% endfor %}
-                            {% if tx.items.all.count > 2 %}...and more{% endif %}
+                            {% if tx.items.all.count > 2 %}
+                            <a href="javascript:void(0);" onclick="openProductModal('{{ tx.pk }}')" class="italic text-blue-600 hover:underline">
+                            (+{{ tx.items.all.count|add:"-2" }} more)
+                            {% endif %}
                         </td>
                         <td class="text-right font-semibold">Rs {{ tx.grand_total_revenue|floatformat:2 }}</td>
                         <td class="text-right font-bold {% if tx.calculated_grand_profit > 0 %}text-success{% else %}text-error{% endif %}">
                             Rs {{ tx.calculated_grand_profit|floatformat:2 }}
                         </td>
                         <td><span class="badge badge-sm badge-outline">{{ tx.get_payment_type_display }}</span></td>
+                       <td>
+                        <span 
+                            class="note cursor-pointer badge badge-sm badge-neutral" 
+                            data-note="{{ tx.notes|default_if_none:''}}" 
+                            data-tx-id="{{ tx.pk }}">
+                            Note
+                        </span>
+                        </td> 
+                        {% if tx.assigned_vehicle.vehicle_number %}
+                        <td><span class="badge badge-sm badge-info">{{ tx.assigned_vehicle.vehicle_number }}</span></td>
+                        {% else %}
+                        <td><span class="text-xs text-base-content/70">N/A</span></td>
+                        {% endif %}
                         <td><span class="badge badge-sm {% if tx.status == 'COMPLETED' %}badge-success{% elif tx.status == 'PENDING_DELIVERY' %}badge-warning{% else %}badge-ghost{% endif %}">{{ tx.get_status_display }}</span></td>
                         <td>
                             <a href="{% url 'stock:sale_receipt' sale_pk=tx.pk %}" class="btn btn-xs btn-outline btn-accent" target="_blank">Receipt</a>
@@ -58,9 +76,108 @@
                     {% endfor %}
                 </tbody>
             </table>
+
+
+             <!-- Product Modal -->
+        <dialog id="productModal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <h3 class="font-bold text-lg mb-4">Products Sold</h3>
+            <div id="productModalContent" class="space-y-2 text-sm">
+            <!-- Products will be inserted here -->
+            </div>
+            <div class="modal-action">
+            <form method="dialog">
+                <button class="btn btn-sm">Close</button>
+            </form>
+            </div>
+        </div>
+        </dialog>
+
+
+         {% for tx in shop_transactions %}
+                <div id="tx-{{ tx.pk }}-items" class="hidden">
+                    {% for item in tx.items.all %}
+                        <div>
+                            <strong>{{ item.product_detail_snapshot.product_base.name }}</strong>
+                            - {{ item.quantity_sold_decimal }} {{ item.product_detail_snapshot.unit_of_measure }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
         </div>
     {% else %}
         <p class="text-center text-base-content/70 py-8">No sales recorded for {{ shop.name }} by you yet.</p>
     {% endif %}
+
+
+
+    <!-- Note Modal -->
+        <input type="checkbox" id="note_modal" class="modal-toggle" />
+        <div class="modal" role="dialog">
+        <div class="modal-box w-full max-w-lg">
+            <h3 class="font-bold text-lg">View/Edit Note</h3>
+
+            <form method="post" action="{% url 'stock:update_note' %}" id="noteForm">
+            {% csrf_token %}
+            <input type="hidden" name="shop_pk" value="{{shop.pk}}">
+            <input type="hidden" name="next" value="shop_purchase_history">
+            <input type="hidden" name="tx_id" id="note_tx_id">
+            <textarea id="note_text" name="note" class="textarea textarea-bordered w-full mt-4" readonly></textarea>
+
+            <div class="modal-action">
+                <label for="note_modal" class="btn">Close</label>
+                <button type="button" id="editNoteBtn" class="btn btn-warning">Edit</button>
+                <button type="submit" id="saveNoteBtn" class="btn btn-primary hidden">Save</button>
+            </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="note_modal">Close</label>
+        </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  {{ block.super }}
+  <script>
+       function openProductModal(txId) {
+    const container = document.getElementById(`tx-${txId}-items`);
+    const content = document.getElementById("productModalContent");
+    content.innerHTML = container ? container.innerHTML : "<p>No product info found.</p>";
+    document.getElementById("productModal").showModal();
+}
+document.addEventListener('DOMContentLoaded', function () {
+
+    const noteModalCheckbox = document.getElementById('note_modal');
+    const noteTextarea = document.getElementById('note_text');
+    const noteTxIdInput = document.getElementById('note_tx_id');
+    const editBtn = document.getElementById('editNoteBtn');
+    const saveBtn = document.getElementById('saveNoteBtn');
+    const noteForm = document.getElementById('noteForm');
+
+
+    document.querySelectorAll('.note').forEach(el =>  {
+        el.addEventListener('click', function() {
+            const note = el.dataset.note || '';
+            const txId = el.dataset.txId;
+
+            noteTextarea.value = note;
+            noteTxIdInput.value = txId;
+            noteTextarea.readOnly = true;
+
+            editBtn.classList.remove('hidden');
+            saveBtn.classList.add('hidden');
+
+            noteModalCheckbox.checked = true;
+        });
+    });
+
+    editBtn.addEventListener('click', function () {
+        noteTextarea.readOnly = false;
+        noteTextarea.focus();
+        editBtn.classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+    });
+});
+</script>
+
 {% endblock %}

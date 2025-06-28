@@ -2,53 +2,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Login | Gov Agency</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            background: #f2f4f8;
-        }
-        .login-container {
-            margin-top: 80px;
-            max-width: 400px;
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-        }
-        .form-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
-        .btn-primary {
-            width: 100%;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Login | Gov Agency</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.2/dist/full.min.css" rel="stylesheet" />
+  <script src="https://kit.fontawesome.com/a2e0e6f91e.js" crossorigin="anonymous"></script>
+  <style>
+    .glass-card {
+      backdrop-filter: blur(20px);
+      background-color: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
 </head>
-<body>
-<div class="container d-flex justify-content-center">
-    <div class="login-container">
-        <div class="form-title text-center">Login</div>
-        <form method="post" >
-            {% csrf_token %}
-            
-                <div class="mb-3">
-                 
-                    <label for="email">Email:</label>
-                    <input type="email" placeholder="Enter Email" name="email">
-                    <br>
-                    <br>
-                    <label for="password">Password:</label>
-                    <input type="password" name="password" placeholder="Password">
-                </div>
-         
-            <button type="submit" class="btn btn-primary">Login</button>
-        </form><br>
-        <center><a href="{% url 'stock:sign_up'%}">Don't have an account?</a></center>
+<body class="min-h-screen flex items-center justify-center bg-base-200">
+
+  <div class="w-[400px] md:w-[460px] p-10 rounded-3xl glass-card shadow-xl text-white bg-neutral text-sm">
+    <h2 class="text-center text-xl font-semibold tracking-widest mb-8 opacity-90">LOGIN</h2>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <label class="form-control w-full mb-6">
+        <div class="label">
+          <span class="label-text text-gray-300">
+            <i class="fa fa-envelope mr-2"></i> Email
+          </span>
+        </div>
+        <input name="email" type="email" placeholder="you@example.com"
+               class="input input-bordered input-md bg-transparent text-white" required>
+      </label>
+
+      <label class="form-control w-full mb-6">
+        <div class="label">
+          <span class="label-text text-gray-300">
+            <i class="fa fa-lock mr-2"></i> Password
+          </span>
+        </div>
+        <input name="password" type="password" placeholder="Password"
+               class="input input-bordered input-md bg-transparent text-white" required>
+      </label>
+
+      {% comment %} <div class="flex items-center justify-between text-xs text-gray-300 mb-4">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="checkbox checkbox-xs" />
+          Remember me
+        </label>
+        <a href="#" class="hover:underline">Forgot Password?</a>
+      </div> {% endcomment %}
+
+      <button type="submit"
+              class="btn btn-primary w-full mt-2 font-semibold tracking-wide">
+        LOGIN
+      </button>
+    </form>
+
+    <div class="text-center mt-6 text-sm text-gray-300">
+      Don't have an account?
+      <a href="{% url 'stock:sign_up' %}" class="link link-info font-medium ml-1">Register</a>
     </div>
-    
-</div>
+  </div>
+
 </body>
 </html>

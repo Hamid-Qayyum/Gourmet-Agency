@@ -3,7 +3,7 @@
 {% block page_title %}Process Delivery & Returns for Transaction #{{ transaction.pk }}{% endblock %}
 
 {% block content %}
-<div class="p-4 md:p-6 max-w-3xl mx-auto" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+<div class="p-4 md:p-6 max-w-3xl mx-auto">
     <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title text-xl mb-4">Processing Transaction #{{ transaction.pk }}</h2>
@@ -12,30 +12,29 @@
                 <p><strong>Customer:</strong> {{ transaction.customer_shop.name|default:transaction.customer_name_manual|default:"N/A" }}</p>
                 <p><strong>Transaction Date:</strong> {{ transaction.transaction_time|date:"Y-m-d H:i" }}</p>
                 <p><strong>Assigned Vehicle:</strong> {{ transaction.assigned_vehicle.vehicle_number|default:"N/A" }}</p>
-                <p><strong>Payment Type:</strong> {{ transaction.get_payment_type_display }}</p>
+                <p><strong>Current Payment Type:</strong> {{ transaction.get_payment_type_display }}</p>
             </div>
-
-            <h3 class="text-lg font-semibold mb-2">Items in Transaction:</h3>
-            <p class="text-xs text-base-content/70 mb-4">
-                For each item below, enter the quantity returned by the customer (in "Carton.Item" format, e.g., 0.2 for 2 items).
-                Leave as 0.0 if nothing was returned for that item.
-            </p>
 
             <form method="POST" action="{% url 'stock:process_delivery_return' sale_pk=transaction.pk %}">
                 {% csrf_token %}
-                {{ formset.management_form }} {# Important for formset #}
+                
+                <h3 class="text-lg font-semibold mb-2">1. Record Item Returns</h3>
+                <p class="text-xs text-base-content/70 mb-4">
+                    For each item below, enter the quantity returned by the customer (e.g., 0.2 for 2 items).
+                </p>
 
-                {% if formset.non_form_errors %}
+                {{ return_formset.management_form }} {# Important for formset #}
+                {% if return_formset.non_form_errors %}
                     <div role="alert" class="alert alert-error text-sm p-3 mb-4">
                         <svg><!-- error icon --></svg>
-                        <div>{% for error in formset.non_form_errors %}{{ error }}{% endfor %}</div>
+                        <div>{% for error in return_formset.non_form_errors %}{{ error }}{% endfor %}</div>
                     </div>
                 {% endif %}
 
                 <div class="space-y-4">
-                {% for form_item in formset %}
+                {% for form_item in return_formset %} {# Changed from formset to return_formset #}
                     <div class="p-3 border border-base-300 rounded-lg">
-                        {{ form_item.id }} {# Hidden ID field for the SalesTransactionItem #}
+                        {{ form_item.id }} {# Hidden ID field #}
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                             <div class="form-control w-full md:col-span-2">
                                 {{ form_item.product_display.label_tag }}
@@ -48,9 +47,6 @@
                             <div class="form-control w-full md:col-span-3">
                                 {{ form_item.returned_quantity_decimal.label_tag }}
                                 {{ form_item.returned_quantity_decimal }}
-                                {% if form_item.returned_quantity_decimal.help_text %}
-                                    <div class="label pt-1"><span class="label-text-alt text-xs">{{ form_item.returned_quantity_decimal.help_text }}</span></div>
-                                {% endif %}
                                 {% if form_item.returned_quantity_decimal.errors %}
                                     <p class="text-error text-xs mt-1">{{ form_item.returned_quantity_decimal.errors|join:", " }}</p>
                                 {% endif %}
@@ -65,9 +61,27 @@
                 {% endfor %}
                 </div>
 
+                <div class="divider my-8"></div>
+
+                <h3 class="text-lg font-semibold mb-2">2. Confirm Final Payment Method</h3>
+                <div class="form-control w-full max-w-sm mb-4">
+                    {{ payment_form.payment_type.label_tag }}
+                    {{ payment_form.payment_type }}
+                    {% if payment_form.payment_type.errors %}
+                        <p class="text-error text-xs mt-1">{{ payment_form.payment_type.errors|join:", " }}</p>
+                    {% endif %}
+                </div>
+                
+                {% if payment_form.non_field_errors %}
+                    <div role="alert" class="alert alert-error text-sm p-3 mb-4">
+                        <svg><!-- error icon --></svg>
+                        <div>{% for error in payment_form.non_field_errors %}{{ error }}{% endfor %}</div>
+                    </div>
+                {% endif %}
+
                 <div class="card-actions justify-end mt-8 space-x-3">
                     <a href="{% url 'stock:pending_deliveries' %}" class="btn btn-ghost">Cancel</a>
-                    <button type="submit" class="btn btn-success">Confirm Delivery & Process Returns</button>
+                    <button type="submit" class="btn btn-success">Confirm Delivery & Finalize</button>
                 </div>
             </form>
         </div>

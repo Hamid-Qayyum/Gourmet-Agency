@@ -39,6 +39,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'stock',
     'django.contrib.humanize',
+    'django.templatetags',
+    'accounts',
+
 ]
 
 MIDDLEWARE = [

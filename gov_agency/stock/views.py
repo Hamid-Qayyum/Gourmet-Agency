@@ -1,7 +1,7 @@
 from django.shortcuts import render,redirect, get_object_or_404
 from .forms import RegisterForm, AddProductForm, ProductDetailForm,VehicleForm, ShopForm,ProcessReturnForm
 from .forms import SalesTransactionItemReturnForm,AddItemToSaleForm,FinalizeSaleForm,SalesTransactionItemReturnFormSet # Import the formset
-
+from .forms import UpdatePaymentTypeForm, AddStockForm
 from django.contrib.auth import login, logout
 from .utils import authenticate 
 from django.contrib.auth.models import User 
@@ -17,6 +17,10 @@ from django.utils import timezone
 from datetime import timedelta, date
 import json 
 from django.db.models.functions import TruncMonth,TruncDay
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.urls import resolve
+
+
 
 
 
@@ -139,7 +143,7 @@ def add_product_details(request):
         )
 
     # Check if the current user has any base products to select from for the form
-    user_has_base_products =  AddProduct.objects.filter(user=request.user).exists()
+    user_has_base_products =  AddProduct.objects.filter(user=request.user).order_by('-created_at')
     if not user_has_base_products and request.method == 'GET' and not query:
         messages.warning(request, "You need to create a base product first (in 'Add Products') before adding details.")
     
@@ -181,10 +185,59 @@ def product_detail_update_view(request, pk):
             return redirect('stock:add_product_details')
     else:
         return redirect('stock:add_product_details')
+    
+
+@login_required
+def add_stock_to_product_detail_view(request, pk):
+    # Get the ProductDetail instance, ensuring user ownership
+    product_detail = get_object_or_404(ProductDetail, pk=pk, user=request.user)
+    
+    if request.method == 'POST':
+        form = AddStockForm(request.POST, product_detail_instance=product_detail)
+        if form.is_valid():
+            new_stock_quantity = form.cleaned_data['new_stock_quantity']
+            new_expiry_date = form.cleaned_data['new_expiry_date']
+
+            try:
+                with transaction.atomic():
+                    # Check if a batch with the exact same new expiry date already exists for this product
+                    existing_batch =  ProductDetail.objects.select_for_update().get(pk=pk, user=request.user)
+                    if existing_batch:
+                        # Add stock to the existing batch with the same expiry date
+                        existing_batch.increase_stock(new_stock_quantity)   
+                        existing_batch.expirey_date = new_expiry_date
+                        existing_batch.save(update_fields=['stock', 'expirey_date', 'updated_at'])
+                        messages.success(request, f"Added {new_stock_quantity} stock to existing batch of {existing_batch.product_base.name} (Exp: {new_expiry_date}). New stock: {existing_batch.stock}.")
+                    else:
+                        # Create a new ProductDetail instance for the new batch
+                        new_batch = ProductDetail.objects.create(
+                            product_base=product_detail.product_base,
+                            user=request.user,
+                            packing_type=product_detail.packing_type,
+                            quantity_in_packing=product_detail.quantity_in_packing,
+                            unit_of_measure=product_detail.unit_of_measure,
+                            items_per_master_unit=product_detail.items_per_master_unit,
+                            price_per_item=product_detail.price_per_item,
+                            stock=new_stock_quantity,
+                            expirey_date=new_expiry_date
+                        )
+                        messages.success(request, f"New stock batch created for {new_batch.product_base.name} with quantity {new_stock_quantity} and expiry {new_expiry_date}.")
+                    
+                return redirect('stock:add_product_details')
+            except Exception as e:
+                messages.error(request, f"An error occurred while adding stock: {str(e)}")
+        else:
+            # This is tricky for a modal. We redirect with a generic error.
+            # A better UX would use AJAX for this form submission.
+            error_string = ". ".join([f"{field}: {', '.join(errors)}" for field, errors in form.errors.items()])
+            messages.error(request, f"Failed to add stock. {error_string}")
+            return redirect('stock:add_product_details')
+    
+    # This view is for POST only from the modal
+    return redirect('stock:add_product_details')
+
 
 #  sales views...................................................................................................................
-
-
 
 @login_required
 def sales_processing_view(request):
@@ -234,7 +287,7 @@ def sales_processing_view(request):
                     messages.success(request, f"Added {quantity_to_add} of {product_detail_batch.product_base.name} to transaction.")
                 
                 request.session[current_transaction_items_session_key] = current_items
-                return redirect('stock:sales') # Redirect to show updated cart
+                return redirect('stock:sales')
 
         elif action == 'remove_item_from_transaction':
             item_index_to_remove = request.POST.get('item_index')
@@ -249,7 +302,7 @@ def sales_processing_view(request):
                     messages.error(request, "Invalid item index to remove.")
             except (ValueError, TypeError):
                 messages.error(request, "Error removing item.")
-            return redirect('stock:sales_page')
+            return redirect('stock:sales')
 
         elif action == 'finalize_transaction':
             current_items = request.session.get(current_transaction_items_session_key, [])
@@ -300,7 +353,7 @@ def sales_processing_view(request):
                         messages.success(request, f"Transaction #{sales_transaction_header.pk} completed successfully!")
                         del request.session[current_transaction_items_session_key] # Clear the cart
                         # Redirect to receipt or back to sales page
-                        return redirect('stock:sales') 
+                        return redirect('stock:all_transactions_list') 
 
                 except ProductDetail.DoesNotExist:
                     messages.error(request, "Error: A product in the transaction no longer exists. Transaction cancelled.")
@@ -318,15 +371,12 @@ def sales_processing_view(request):
     current_transaction_items = request.session.get(current_transaction_items_session_key, [])
     current_transaction_subtotal = sum(Decimal(item['line_subtotal']) for item in current_transaction_items)
 
-    # Prepare recent transactions for display
-    recent_transactions = SalesTransaction.objects.filter(user=request.user).order_by('-transaction_time')[:10]
 
     context = {
         'add_item_form': add_item_form,
         'finalize_sale_form': finalize_sale_form,
         'current_transaction_items': current_transaction_items,
         'current_transaction_subtotal': current_transaction_subtotal,
-        'recent_transactions': recent_transactions,
     }
     return render(request, 'stock/sales_multiem.html', context) # New template name
 
@@ -353,7 +403,52 @@ def ajax_get_batch_details_for_sale(request, pk): # Renamed from get_sale_produc
         return JsonResponse({'success': False, 'error': 'Product batch not found or not authorized.'}, status=404)
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'An error occurred in AJAX: {str(e)}'}, status=500)
-    
+
+
+@login_required
+def all_transactions_list_view(request):
+    transactions_list = SalesTransaction.objects.filter(
+        user=request.user # Or remove/adjust if admins see all
+    ).select_related(
+        'customer_shop', 
+        'assigned_vehicle'
+    ).prefetch_related(
+        'items__product_detail_snapshot__product_base' # For product summary
+    ).order_by('-transaction_time')
+
+    # Pagination (optional, but good for long lists)
+    paginator = Paginator(transactions_list, 25) # Show 25 transactions per page
+    page_number = request.GET.get('page')
+    try:
+        page_obj = paginator.page(page_number)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1) # If page is not an integer, deliver first page.
+    except EmptyPage:
+        # If page is out of range (e.g. 9999), deliver last page of results.
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        'page_obj': page_obj, # Use page_obj in template for pagination
+        'transactions': page_obj.object_list, # The transactions for the current page
+    }
+    return render(request, 'stock/all_transactions_list.html', context)
+
+
+@login_required
+def update_note(request):
+    tx_id = request.POST.get('tx_id')
+    new_note = request.POST.get('note', '')
+    url = request.POST.get('next')
+    tx = get_object_or_404(SalesTransaction, pk=tx_id)
+    if tx:
+        tx.notes = new_note
+        tx.save()
+    else:
+        messages.error(request, f"no Transaction found")
+    if url == 'shop_purchase_history':
+        shop_pk = request.POST.get('shop_pk') 
+        return redirect('stock:shop_purchase_history', shop_pk=shop_pk)
+    return redirect('stock:all_transactions_list')  # or the same page
 
 
 
@@ -382,79 +477,72 @@ def pending_deliveries_view(request):
 
 
 @login_required
-def process_delivery_return_view(request, sale_pk): # sale_pk is SalesTransaction pk
+def process_delivery_return_view(request, sale_pk):
     sales_transaction = get_object_or_404(
         SalesTransaction, 
         pk=sale_pk, 
         user=request.user, 
-        status=SalesTransaction.SALE_STATUS_CHOICES[1][0] # 'PENDING_DELIVERY'
+        status__in=[SalesTransaction.SALE_STATUS_CHOICES[1][0], SalesTransaction.SALE_STATUS_CHOICES[2][0]] 
+        # Allow processing for 'PENDING_DELIVERY' and 'PARTIALLY_RETURNED'
     )
-
-    # Get the items related to this specific sales transaction for the formset
     items_queryset = SalesTransactionItem.objects.filter(transaction=sales_transaction).select_related(
         'product_detail_snapshot__product_base'
     )
 
     if request.method == 'POST':
-        # Bind the formset to the POST data and the queryset of items
-        formset = SalesTransactionItemReturnFormSet(request.POST, queryset=items_queryset)
-        if formset.is_valid():
+        # Initialize both the formset for returns and the form for payment type
+        return_formset = SalesTransactionItemReturnFormSet(request.POST, queryset=items_queryset)
+        payment_form = UpdatePaymentTypeForm(request.POST, instance=sales_transaction)
+
+        if return_formset.is_valid() and payment_form.is_valid():
             try:
                 with transaction.atomic():
-                    instances = formset.save(commit=False) # Get instances but don't save yet
-                    
+                    # --- Process Returns ---
+                    returned_items = return_formset.save(commit=False)
                     total_items_dispatched_count = 0
                     total_items_returned_count = 0
 
-                    for item_instance in instances: # item_instance is a SalesTransactionItem
-                        # The formset only changed 'returned_quantity_decimal'
-                        # The increase_stock method needs to be called on the ProductDetail model
-                        
-                        original_dispatched_items_for_line = item_instance.dispatched_individual_items_count
-                        
-                        # Get the ProductDetail for stock update
+                    for item_instance in returned_items:
                         product_detail_to_update = item_instance.product_detail_snapshot
-                        
-                        # Calculate individual items returned for THIS line based on the formset's input
-                        # (which is item_instance.returned_quantity_decimal after formset.save(commit=False))
-                        individual_items_returned_for_line = item_instance.returned_individual_items_count # Uses property
-                        
-                        total_items_dispatched_count += original_dispatched_items_for_line
-                        total_items_returned_count += individual_items_returned_for_line
+                        returned_quantity_decimal = item_instance.returned_quantity_decimal
 
-                        if individual_items_returned_for_line > 0:
-                            if not product_detail_to_update.increase_stock(item_instance.returned_quantity_decimal):
-                                # This should ideally be caught in formset validation if possible,
-                                # or indicates a severe issue if increase_stock itself fails.
+                        # Add stock back to inventory if items were returned
+                        if returned_quantity_decimal and returned_quantity_decimal > Decimal('0.0'):
+                            if not product_detail_to_update.increase_stock(returned_quantity_decimal):
                                 raise Exception(f"Failed to add returned stock for {product_detail_to_update.product_base.name}.")
                         
-                        item_instance.save() # Now save the SaleItem with updated returned_quantity_decimal
-
-                    # Update the overall SalesTransaction status
+                        item_instance.save() # Save the SalesTransactionItem with updated return quantity
+                        
+                        total_items_dispatched_count += item_instance.dispatched_individual_items_count
+                        total_items_returned_count += item_instance.returned_individual_items_count
+                    
+                    # --- Update Overall Transaction ---
+                    # 1. Save the payment type from the form
+                    payment_form.save() # This updates sales_transaction.payment_type
+                    
+                    # 2. Update the status based on returns
                     if total_items_returned_count == 0:
                         sales_transaction.status = SalesTransaction.SALE_STATUS_CHOICES[2][0] # 'COMPLETED'
                     elif total_items_returned_count >= total_items_dispatched_count:
-                        # This should be prevented by form validation (total returned <= total dispatched)
                         sales_transaction.status = SalesTransaction.SALE_STATUS_CHOICES[3][0] # 'FULLY_RETURNED'
-                    else: # Some items returned, but not all
+                    else:
                         sales_transaction.status = SalesTransaction.SALE_STATUS_CHOICES[2][0] # 'PARTIALLY_RETURNED'
                     
                     sales_transaction.save(update_fields=['status'])
-                    # sales_transaction.update_grand_totals() will be called by item_instance.save() if items change
-
-                    messages.success(request, f"Delivery for Transaction #{sales_transaction.pk} processed. Status: {sales_transaction.get_status_display()}.")
+                    
+                    messages.success(request, f"Delivery for Transaction #{sales_transaction.pk} processed successfully.")
                     return redirect('stock:pending_deliveries')
             except Exception as e:
                 messages.error(request, f"Error processing delivery/return: {str(e)}")
-                # Formset with errors will be re-rendered
-        else: # Formset is not valid
-            messages.error(request, "Please correct the errors in the return quantities.")
-            # Formset with errors will be passed to the template
+        else:
+            messages.error(request, "Please correct the errors below.")
     else: # GET request
-        formset = SalesTransactionItemReturnFormSet(queryset=items_queryset)
+        return_formset = SalesTransactionItemReturnFormSet(queryset=items_queryset)
+        payment_form = UpdatePaymentTypeForm(instance=sales_transaction) # Pre-fill with current payment type
 
     context = {
-        'formset': formset,
+        'return_formset': return_formset,
+        'payment_form': payment_form,
         'transaction': sales_transaction,
     }
     return render(request, 'stock/process_delivery_return.html', context)

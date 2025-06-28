@@ -30,6 +30,7 @@
         </div>
         <div id="contextual-action-buttons" class="hidden"> {# Initially hidden #}
             <button id="updateSelectedBtn" class="btn btn-info btn-sm mr-2" disabled>Update Selected</button>
+            <button id="addStockSelectedBtn" class="btn btn-accent btn-sm mr-2" disabled>Add Stock</button>
             <button id="deleteSelectedBtn" class="btn btn-error btn-sm" disabled>Delete Selected</button>
         </div>
         <form method="GET" action="{% url 'stock:add_product_details' %}" class="flex items-center gap-2">
@@ -67,7 +68,7 @@
                 {% for detail in product_details %}
                 <tr class="hover"
                     data-pk="{{ detail.pk }}"
-                    data-product-base-id="{{ detail.product_base.id }}"
+                    data-product-base-id="{{detail.product_base.pk }}"
                     data-product-base-name="{{ detail.product_base.name}}"
                     data-packing-type="{{ detail.packing_type }}"
                     data-quantity-in-packing="{{ detail.quantity_in_packing|stringformat:'.2f' }}" {# Ensure correct decimal format for JS #}
@@ -164,8 +165,8 @@
                         <label class="label" for="update_product_base"><span class="label-text">Base Product Name</span></label>
                       <select name="product_base" id="update_product_base" class="select select-bordered w-full" required>
                             {# Options will be populated by JS, or copied from create_form #}
-                            {% for detail in product_details %}
-                                 <option value="{{detail.product_base.id}}">{{ detail.product_base.name }} <span class="text-red-500">{{detail.expirey_date}}</span></option>
+                            {% for base_product in user_has_base_products %}
+                                 <option value="{{base_product.id}}">{{ base_product.name }}</option>
                            {% endfor %}
                         </select>
                     </div>
@@ -226,6 +227,46 @@
         <label class="modal-backdrop" for="delete_selected_confirm_modal_checkbox">Close</label>
     </div>
 
+
+    <!-- ADD STOCK MODAL (NEW) -->
+    <input type="checkbox" id="add_stock_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog" id="addStockModal">
+        <div class="modal-box">
+            <form id="addStockForm" method="post" action=""> {# Action set by JS #}
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4" id="addStockModalTitle">Add Stock to Product</h3>
+                
+                <div class="space-y-4">
+                    <div class="form-control w-full">
+                        <label class="label"><span class="label-text">Current Stock</span></label>
+                        <input type="text" id="add_stock_current_stock_display" class="input input-bordered w-full bg-base-200" readonly>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label"><span class="label-text">Current Expiry Date</span></label>
+                        <input type="text" id="add_stock_current_expiry_display" class="input input-bordered w-full bg-base-200" readonly>
+                    </div>
+                    
+                    <div class="divider">Enter New Stock Details</div>
+                    
+                    <div class="form-control w-full">
+                        <label class="label" for="id_new_stock_quantity"><span class="label-text font-medium">New Stock Quantity to Add</span></label>
+                        <input type="number" name="new_stock_quantity" step="0.1" class="input input-bordered w-full" placeholder="e.g., 10.5" required id="id_new_stock_quantity">
+                         <div class="label"><span class="label-text-alt">Enter in 'Carton.Item' format (e.g., 5.3 for 5 cartons and 3 items).</span></div>
+                    </div>
+                    <div class="form-control w-full">
+                        <label class="label" for="id_new_expiry_date"><span class="label-text font-medium">New Expiry Date for this Stock</span></label>
+                        <input type="date" name="new_expiry_date" class="input input-bordered w-full" required id="id_new_expiry_date">
+                    </div>
+                </div>
+                
+                <div class="modal-action mt-6">
+                    <label for="add_stock_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-accent">Add This Stock</button>
+                </div>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="add_stock_modal_checkbox">Close</label>
+    </div>
 </div>
 
 {% endblock %}
@@ -245,7 +286,6 @@
     });
     
 
-
     document.addEventListener('DOMContentLoaded', function () {
     const globalAddButton = document.getElementById('addDetailBtnGlobal');
     const contextualActionsDiv = document.getElementById('contextual-action-buttons');
@@ -256,21 +296,37 @@
     const table = document.getElementById('productDetailsTable');
     const updateDetailModalCheckbox = document.getElementById('update_detail_modal_checkbox');
 
+     const addStockSelectedBtn = document.getElementById('addStockSelectedBtn');
+    const addStockModalCheckbox = document.getElementById('add_stock_modal_checkbox');
+    const addStockForm = document.getElementById('addStockForm');
+    const addStockModalTitle = document.getElementById('addStockModalTitle');
+    const currentStockDisplay = document.getElementById('add_stock_current_stock_display');
+    const currentExpiryDisplay = document.getElementById('add_stock_current_expiry_display');
 
-    function updateContextualButtons() {
+
+     function updateContextualButtons() {
         const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
         const selectedCount = selectedCheckboxes.length;
+        
+        const globalAddButton = document.getElementById('addDetailBtnGlobal');
+        const contextualActionsDiv = document.getElementById('contextual-action-buttons');
+        const updateSelectedButton = document.getElementById('updateSelectedBtn');
+        const deleteSelectedButton = document.getElementById('deleteSelectedBtn');
+        const addStockButton = document.getElementById('addStockSelectedBtn'); // Get new button
 
         if (selectedCount > 0) {
             if (globalAddButton) globalAddButton.classList.add('hidden');
-            contextualActionsDiv.classList.remove('hidden');
-            deleteSelectedButton.disabled = false;
-            openUpdateModalBtn.disabled = selectedCount !== 1; // Enable update only if exactly one is selected
+            if (contextualActionsDiv) contextualActionsDiv.classList.remove('hidden');
+            if (deleteSelectedButton) deleteSelectedButton.disabled = false;
+            // Enable update and add stock only if exactly one is selected
+            if (updateSelectedButton) updateSelectedButton.disabled = selectedCount !== 1;
+            if (addStockButton) addStockButton.disabled = selectedCount !== 1;
         } else {
             if (globalAddButton) globalAddButton.classList.remove('hidden');
-            contextualActionsDiv.classList.add('hidden');
-            deleteSelectedButton.disabled = true;
-            openUpdateModalBtn.disabled = true;
+            if (contextualActionsDiv) contextualActionsDiv.classList.add('hidden');
+            if (deleteSelectedButton) deleteSelectedButton.disabled = true;
+            if (updateSelectedButton) updateSelectedButton.disabled = true;
+            if (addStockButton) addStockButton.disabled = true;
         }
     }
 
@@ -312,15 +368,13 @@
                         const updateModalTitle = document.getElementById('updateModalTitle');
                     if (!selectedCheckbox) return; // Should be disabled if none selected
                         const selectedRow = selectedCheckbox.closest('tr');
-                        console.log("selected row exp date: "+selectedRow.dataset.expireyDate)
                         if (!selectedRow) return;
                         const detailId = selectedRow.dataset.pk;
                         updateModalTitle.textContent = `Update Detail for: ${selectedRow.querySelector('.product-name').textContent.trim()}`;
                         // Set form action
                         updateDetailModalForm.action = `{% url 'stock:product_detail_update' pk=0 %}`.replace('0', detailId);
                         // Populate form fields from data attributes  data-product-base-id data-stock
-                        //updateDetailModalForm.querySelector('#update_product_base').value = selectedRow.dataset.productBaseID;
-
+                        updateDetailModalForm.querySelector('#update_product_base').value = selectedRow.dataset.productBaseId;
                         updateDetailModalForm.querySelector('#update_packing_type').value = selectedRow.dataset.packingType;
                         updateDetailModalForm.querySelector('#update_quantity_in_packing').value = selectedRow.dataset.quantityInPacking;
                         updateDetailModalForm.querySelector('#update_unit_of_measure').value = selectedRow.dataset.unitOfMeasure;
@@ -354,7 +408,39 @@
         });
     }
         
-    
+     // --- Logic for the new "Add Stock" button ---
+    if (addStockSelectedBtn) {
+        addStockSelectedBtn.addEventListener('click', function() {
+            const selectedCheckbox = document.querySelector('.row-checkbox:checked');
+            if (!selectedCheckbox) return;
+
+            const selectedRow = selectedCheckbox.closest('tr');
+            if (!selectedRow) return;
+
+            const detailId = selectedRow.dataset.pk;
+            
+            // Populate the modal with info from the selected row
+            addStockModalTitle.textContent = `Add Stock to: ${selectedRow.dataset.productBaseName}`;
+            currentStockDisplay.value = selectedRow.dataset.stock;
+            currentExpiryDisplay.value = selectedRow.dataset.expireyDate; // Assumes YYYY-MM-DD format from data attribute
+
+            // Set the form's action URL
+            addStockForm.action = `{% url 'stock:add_stock_to_product_detail' pk=0 %}`.replace('0', detailId);
+
+            // Show the modal
+            if (addStockModalCheckbox) addStockModalCheckbox.checked = true;
+        });
+    }
+
+    // Clear add stock modal on close
+    if (addStockModalCheckbox) {
+        addStockModalCheckbox.addEventListener('change', function() {
+            if (!this.checked) {
+                if (addStockForm) addStockForm.reset();
+                addStockForm.action = '';
+            }
+        });
+    }
 
     // --- Placeholder for Delete Selected Button Action ---
     if (deleteSelectedButton) {

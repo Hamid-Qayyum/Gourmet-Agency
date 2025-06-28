@@ -192,7 +192,7 @@ class SalesTransaction(models.Model):
     PAYMENT_TYPE_CHOICES = [
         ('CASH', 'Cash on Hand'),
         ('ONLINE', 'Online Transfer'),
-        ('CREDIT', 'Credit/Account'),
+        ('CREDIT', 'Credit'),
     ]
     SALE_STATUS_CHOICES = [
         ('PENDING_ITEMS', 'Pending Items'),     # Cart is being built, not yet finalized
@@ -601,6 +601,24 @@ class Shop(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def current_balance(self):
+        """
+        Calculates the current outstanding balance for the shop by summing
+        all its related financial transactions from the 'accounts' app.
+        Balance = Total Debits - Total Credits
+        """
+        # self.financial_transactions comes from the related_name in ShopFinancialTransaction model
+        totals = self.financial_transactions.aggregate(
+            total_debit=Sum('debit_amount'),
+            total_credit=Sum('credit_amount')
+        )
+        
+        total_debit = totals.get('total_debit') or Decimal('0.00')
+        total_credit = totals.get('total_credit') or Decimal('0.00')
+        
+        return total_debit - total_credit
 
     class Meta:
         ordering = ['name'] # Order by name alphabetically

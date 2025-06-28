@@ -20,10 +20,14 @@ urlpatterns = [
    path('add_product_details/',views.add_product_details, name='add_product_details'),
    path('product-details/delete/', views.product_detail_delete_selected_view, name='product_detail_delete_selected'),
    path('product-details/update/<int:pk>/', views.product_detail_update_view, name='product_detail_update'),
+   path('product-details/add-stock/<int:pk>/', views.add_stock_to_product_detail_view, name='add_stock_to_product_detail'),
+
 
    #views about sales.................
    path('sales/', views.sales_processing_view, name="sales"),
    path('sales/ajax/get-batch-info/<int:pk>/', views.ajax_get_batch_details_for_sale, name='ajax_get_batch_info_for_sale'),
+   path('transactions/all/', views.all_transactions_list_view, name='all_transactions_list'),
+   path('update-note/', views.update_note, name='update_note'),
    path('sales/pending-deliveries/', views.pending_deliveries_view, name='pending_deliveries'),
    path('sales/process-delivery/<int:sale_pk>/', views.process_delivery_return_view, name='process_delivery_return'),
    path('reports/sales/', views.sales_report_view, name='sales_report'),

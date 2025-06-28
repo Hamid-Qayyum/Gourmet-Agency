@@ -5,6 +5,8 @@ from .models import AddProduct,ProductDetail,Sale, Vehicle, Shop,SalesTransactio
 from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.forms import modelformset_factory
+from datetime import date, timedelta
+
 
 
 
@@ -104,7 +106,7 @@ class ProductDetailForm(forms.ModelForm):
         self.user = kwargs.pop('user', None)
         super().__init__(*args,**kwargs)
         if self.user:
-            self.fields['product_base'].queryset = AddProduct.objects.filter(user=self.user).order_by('name')
+            self.fields['product_base'].queryset = AddProduct.objects.filter(user=self.user)
         self.fields['product_base'].empty_label = None
 
     def clean_price_per_item(self):
@@ -132,6 +134,31 @@ class ProductDetailForm(forms.ModelForm):
         return cleaned_data
     
 
+
+class AddStockForm(forms.Form):
+    """A form to add new stock and set a new expiry date for an existing ProductDetail batch."""
+    new_stock_quantity = forms.DecimalField(
+        label="New Stock Quantity to Add",
+        max_digits=10, decimal_places=1,
+        validators=[MinValueValidator(Decimal('0.1'))],
+        help_text="Enter new stock in 'master_unit.item' format (e.g., 5.3 for 5 master units and 3 items).",
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.1', 'placeholder': 'e.g., 10.5'})
+    )
+    new_expiry_date = forms.DateField(
+        label="New Expiry Date for this Stock",
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'input input-bordered w-full'}),
+        initial=date.today() + timedelta(days=30) # Default to 30 days from now
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.product_detail_instance = kwargs.pop('product_detail_instance', None)
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        # You could add cross-field validation here if needed, but for now it's simple.
+        cleaned_data = super().clean()
+        return cleaned_data
+    
 
 
 class AddItemToSaleForm(forms.Form):
@@ -275,7 +302,7 @@ class SalesTransactionItemReturnForm(forms.ModelForm):
         }
         labels = {
             'returned_quantity_decimal': 'Quantity Returned (e.g., 0.2)'
-        }
+                      }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -311,6 +338,20 @@ SalesTransactionItemReturnFormSet = modelformset_factory(
     extra=0, # Don't show extra blank forms
     can_delete=False # We are not deleting items here, only updating return quantity
 )
+
+class UpdatePaymentTypeForm(forms.ModelForm):
+    """
+    A simple form to update only the payment_type of a SalesTransaction.
+    """
+    class Meta:
+        model = SalesTransaction
+        fields = ['payment_type']
+        widgets = {
+            'payment_type': forms.Select(attrs={'class': 'select select-bordered w-full'})
+        }
+        labels = {
+            'payment_type': 'Confirm or Change Payment Type'
+        }
 
 
 class SaleForm(forms.Form): # Not a ModelForm because of dynamic/conditional fields
