@@ -7,6 +7,7 @@ from .utils import authenticate
 from django.contrib.auth.models import User 
 from django.contrib.auth.decorators import login_required
 from .models import AddProduct, ProductDetail,Sale, Vehicle, Shop, SalesTransaction, SalesTransactionItem
+from accounts.models import ShopFinancialTransaction  # model from account app
 from django.contrib import messages
 from django.db.models  import Q
 from django.db import transaction # For atomic operations
@@ -315,6 +316,9 @@ def sales_processing_view(request):
                 try:
                     with transaction.atomic():
                         # Create SalesTransaction header
+                        customer_shop_instance = finalize_sale_form.cleaned_data.get('customer_shop')
+                        customer_name_manual_input = finalize_sale_form.cleaned_data.get('customer_name_manual')
+
                         sales_transaction_header = SalesTransaction.objects.create(
                             user=request.user,
                             customer_shop=finalize_sale_form.cleaned_data.get('customer_shop'),
@@ -349,8 +353,38 @@ def sales_processing_view(request):
                                 # returned_quantity_decimal defaults to 0
                             )
                         
+                        # After all items are saved, the grand_total_revenue is updated.
+                        # We need to refresh the instance to get the latest calculated total.
+                        sales_transaction_header.refresh_from_db()
+                        
+                        # Create a ledger entry if the payment type is CREDIT, regardless of customer type.
+                        if sales_transaction_header.payment_type == 'CREDIT':
+                            # Determine which customer identifier to use for the ledger
+                            if customer_shop_instance:
+                                # If a registered shop was selected, link to it
+                                ShopFinancialTransaction.objects.create(
+                                    shop=customer_shop_instance,
+                                    user=request.user,
+                                    source_sale=sales_transaction_header,
+                                    transaction_type='CREDIT_SALE',
+                                    debit_amount=sales_transaction_header.grand_total_revenue,
+                                    notes=f"Credit from Sale Transaction #{sales_transaction_header.pk}"
+                                )
+                            elif customer_name_manual_input:
+                                # If a manual name was used, create a ledger entry without a shop link
+                                # and store the name in the snapshot field.
+                                ShopFinancialTransaction.objects.create(
+                                    shop=None, # Explicitly no shop
+                                    customer_name_snapshot=customer_name_manual_input,
+                                    user=request.user,
+                                    source_sale=sales_transaction_header,
+                                    transaction_type='CREDIT_SALE',
+                                    debit_amount=sales_transaction_header.grand_total_revenue,
+                                    notes=f"Credit from Sale Transaction #{sales_transaction_header.pk}"
+                                )
+                        
                         # SalesTransactionItem save will trigger SalesTransaction.update_grand_totals
-                        messages.success(request, f"Transaction #{sales_transaction_header.pk} completed successfully!")
+                        messages.success(request, f"Transaction #{sales_transaction_header.pk} completed    !")
                         del request.session[current_transaction_items_session_key] # Clear the cart
                         # Redirect to receipt or back to sales page
                         return redirect('stock:all_transactions_list') 
@@ -519,7 +553,35 @@ def process_delivery_return_view(request, sale_pk):
                     # --- Update Overall Transaction ---
                     # 1. Save the payment type from the form
                     payment_form.save() # This updates sales_transaction.payment_type
+                    sales_transaction.refresh_from_db()
+                     # 2. Check if a credit entry needs to be created or removed/updated
+                    existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=sales_transaction).first()
                     
+                    final_revenue = sales_transaction.grand_total_revenue # This is the final amount after returns
+
+                    if sales_transaction.payment_type == 'CREDIT' and sales_transaction.customer_shop:
+                        if existing_credit_entry:
+                            # If credit entry already exists, update its amount to the final revenue
+                            existing_credit_entry.debit_amount = final_revenue
+                            existing_credit_entry.notes = f"Credit updated upon delivery confirmation for Sale #{sales_transaction.pk}"
+                            existing_credit_entry.save()
+                        else:
+                            # If no entry exists, create a new one
+                            ShopFinancialTransaction.objects.create(
+                                shop=sales_transaction.customer_shop,
+                                user=request.user,
+                                source_sale=sales_transaction,
+                                transaction_type='CREDIT_SALE',
+                                debit_amount=final_revenue,
+                                credit_amount=Decimal('0.00'),
+                                notes=f"Credit from Sale #{sales_transaction.pk} upon delivery confirmation."
+                            )
+                    elif sales_transaction.payment_type != 'CREDIT' and existing_credit_entry:
+                        # If payment was changed from 'CREDIT' to something else ('CASH'/'ONLINE'),
+                        # the credit entry should be voided.
+                        existing_credit_entry.delete()
+                    # --- END OF NEW/REVISED LOGIC ---
+
                     # 2. Update the status based on returns
                     if total_items_returned_count == 0:
                         sales_transaction.status = SalesTransaction.SALE_STATUS_CHOICES[2][0] # 'COMPLETED'

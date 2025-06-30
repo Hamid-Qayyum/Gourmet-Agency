@@ -1,0 +1,33 @@
+<input type="checkbox" id="edit_tx_modal_checkbox" class="modal-toggle" />
+<div class="modal modal-bottom sm:modal-middle" role="dialog" id="editTxModal">
+    <div class="modal-box">
+        <form id="editTxForm" method="post" action="">
+            {% csrf_token %}
+            <h3 class="font-bold text-lg mb-4" id="editTxModalTitle">Edit Transaction</h3>
+            <div class="space-y-4">
+                <div class="form-control w-full">
+                    <label class="label" for="id_transaction_date"><span class="label-text">{{ edit_transaction_form.transaction_date.label }}</span></label>
+                    {{ edit_transaction_form.transaction_date }}
+                </div>
+                <div class="form-control w-full">
+                    <label class="label" for="id_debit_amount"><span class="label-text">{{ edit_transaction_form.debit_amount.label }}</span></label>
+                    {{ edit_transaction_form.debit_amount }}
+                    <div class="label"><span class="label-text-alt">{{ edit_transaction_form.debit_amount.help_text }}</span></div>
+                </div>
+                <div class="form-control w-full">
+                    <label class="label" for="id_credit_amount"><span class="label-text">{{ edit_transaction_form.credit_amount.label }}</span></label>
+                    {{ edit_transaction_form.credit_amount }}
+                    <div class="label"><span class="label-text-alt">{{ edit_transaction_form.credit_amount.help_text }}</span></div>
+                </div>
+                <div class="form-control w-full">
+                    <label class="label" for="id_notes"><span class="label-text">{{ edit_transaction_form.notes.label }}</span></label>
+                    {{ edit_transaction_form.notes }}
+                </div>
+            </div>
+            <div class="modal-action mt-6">
+                <label for="edit_tx_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div><label class="modal-backdrop" for="edit_tx_modal_checkbox">Close</label>
+</div>

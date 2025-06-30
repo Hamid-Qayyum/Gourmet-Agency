@@ -1,0 +1,15 @@
+<input type="checkbox" id="delete_tx_modal_checkbox" class="modal-toggle" />
+<div class="modal modal-bottom sm:modal-middle" role="dialog" id="deleteTxModal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-error">Confirm Deletion</h3>
+        <p class="py-4" id="deleteTxConfirmMessageText">Are you sure you want to delete this financial record?</p>
+        <p class="text-sm text-warning-content bg-warning/20 p-2 rounded-md">This cannot be undone.</p>
+        <div class="modal-action mt-4">
+            <form id="deleteTxForm" method="POST" action=""><!-- Action set by JS -->
+                {% csrf_token %}
+                <button type="submit" class="btn btn-error">Yes, Delete Record</button>
+            </form>
+            <label for="delete_tx_modal_checkbox" class="btn btn-ghost">Cancel</label>
+        </div>
+    </div><label class="modal-backdrop" for="delete_tx_modal_checkbox">Close</label>
+</div>

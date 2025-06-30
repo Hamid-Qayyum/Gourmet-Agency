@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Transactions Hub{% endblock %}
+{% block page_title %}Select a Ledger Group{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
+    <h1 class="text-3xl font-bold mb-6 text-center">Transactions Hub</h1>
+    <p class="text-center text-base-content/70 mb-8">Select a vehicle or the main store to view associated customer ledgers.</p>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <!-- Card for Store / Walk-in Sales -->
+        <a href="{% url 'accounts:store_ledger_summary' %}" class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+            <div class="card-body items-center text-center">
+                <div class="p-4 bg-primary rounded-full text-primary-content mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                </div>
+                <h2 class="card-title">Store / Walk-in</h2>
+                <p class="text-xs">Sales without a vehicle.</p>
+            </div>
+        </a>
+
+        <!-- Cards for each Vehicle -->
+        {% for vehicle in vehicles %}
+            <a href=" {% url 'accounts:vehicle_ledger_summary' vehicle_pk=vehicle.pk %}" class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
+                <div class="card-body items-center text-center">
+                    <div class="p-4 bg-accent rounded-full text-accent-content mb-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h8a1 1 0 001-1z" /><path stroke-linecap="round" stroke-linejoin="round" d="M18 18h1a1 1 0 001-1v-3.354a1.5 1.5 0 00-.44-1.06l-2.854-2.853A1.5 1.5 0 0015.354 8H14V5a1 1 0 00-1-1h-1" /></svg>
+                    </div>
+                    <h2 class="card-title">{{ vehicle.vehicle_number }}</h2>
+                    <p class="text-xs">{{ vehicle.get_vehicle_type_display }}</p>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

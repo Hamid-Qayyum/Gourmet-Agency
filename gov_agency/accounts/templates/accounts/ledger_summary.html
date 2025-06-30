@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Ledger Summary: {{ grouping_object.vehicle_number|default:grouping_type }}{% endblock %}
+{% block page_title %}Customer Ledgers for: {{ grouping_object.vehicle_number|default:grouping_type }}{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Customer Ledgers</h1>
+        <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline">← Back to Hub</a>
+    </div>
+
+    <!-- Section for Registered Shops -->
+    <div class="card bg-base-100 shadow-xl mb-8">
+        <div class="card-body">
+            <h2 class="card-title">Registered Shops</h2>
+            {% if associated_shops %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                    {% for shop in associated_shops %}
+                    <a href="{% url 'accounts:shop_ledger' shop_pk=shop.pk %}" class="p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between">
+                        <div>
+                            <div class="font-semibold text-primary">{{ shop.name }}</div>
+                            <div class="text-xs text-base-content/70">{{ shop.location_address|truncatewords:5 }}</div>
+                        </div>
+                        <div class="text-sm mt-3 pt-2 border-t border-base-300">
+                            Balance: 
+                            <span class="font-bold {% if shop.current_balance > 0 %}text-error{% elif shop.current_balance < 0 %}text-success{% endif %}">
+                                Rs {{ shop.current_balance|floatformat:2|intcomma }}
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-sm italic text-base-content/60 mt-4">No registered shops with transactions found for this group.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Section for Manual Customers -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title">Manual Customers</h2>
+            {% if manual_customers %}
+                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                    {% for customer in manual_customers %}
+                    <a href="{% url 'accounts:manual_customer_ledger' customer_name=customer.customer_name_snapshot %}" class="p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between">
+                        <div>
+                            <div class="font-semibold text-secondary">{{ customer.customer_name_snapshot }}</div>
+                        </div>
+                        <div class="text-sm mt-3 pt-2 border-t border-base-300">
+                            Balance: 
+                            <span class="font-bold {% if customer.balance > 0 %}text-error{% elif customer.balance < 0 %}text-success{% endif %}">
+                                Rs {{ customer.balance|floatformat:2|intcomma }}
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                 <p class="text-sm italic text-base-content/60 mt-4">No manual customer transactions found for this group.</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

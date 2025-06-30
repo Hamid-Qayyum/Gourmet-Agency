@@ -21,7 +21,17 @@ class ShopFinancialTransaction(models.Model):
     shop = models.ForeignKey(
         'stock.Shop', # Use string 'app_name.ModelName' to prevent circular imports
         on_delete=models.CASCADE, 
-        related_name="financial_transactions" # e.g., my_shop.financial_transactions.all()
+        related_name="financial_transactions", # e.g., my_shop.financial_transactions.all()
+        null=True,
+        blank=True,
+        help_text="The registered shop this transaction belongs to, if applicable."
+    )
+
+    customer_name_snapshot = models.CharField(
+        max_length=200,
+        blank=True, 
+        null=True,
+        help_text="Customer name for this transaction, if not a registered shop."
     )
     
     # User who recorded this financial transaction
@@ -57,8 +67,14 @@ class ShopFinancialTransaction(models.Model):
     notes = models.CharField(max_length=255, blank=True, null=True)
     transaction_date = models.DateTimeField(default=timezone.now)
 
+    def get_customer_display_name(self):
+        """Returns the shop name or the manual customer name."""
+        if self.shop:
+            return self.shop.name
+        return self.customer_name_snapshot or "Unknown Customer"
+
     def __str__(self):
-        return f"{self.get_transaction_type_display()} for {self.shop.name} on {self.transaction_date.strftime('%Y-%m-%d')}"
+        return f"{self.get_transaction_type_display()} for {self.get_customer_display_name} on {self.transaction_date.strftime('%Y-%m-%d')}"
 
     class Meta:
         ordering = ['-transaction_date', '-pk'] # Order by most recent first
