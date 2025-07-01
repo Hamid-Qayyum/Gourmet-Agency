@@ -26,7 +26,6 @@
                 {{ return_formset.management_form }} {# Important for formset #}
                 {% if return_formset.non_form_errors %}
                     <div role="alert" class="alert alert-error text-sm p-3 mb-4">
-                        <svg><!-- error icon --></svg>
                         <div>{% for error in return_formset.non_form_errors %}{{ error }}{% endfor %}</div>
                     </div>
                 {% endif %}

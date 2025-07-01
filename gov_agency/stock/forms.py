@@ -116,14 +116,29 @@ class ProductDetailForm(forms.ModelForm):
         return price
     
     def clean_stock(self):
+        """
+        Validates the stock field based on the new 'MasterUnits.IndividualItems'
+        decimal format (2 decimal places).
+        """
         stock = self.cleaned_data.get('stock')
-        items_per_carton = self.cleaned_data.get('items_per_master_unit')
-        if stock and items_per_carton:
-            full_cartons = int(stock)
-            remaining_items = (stock - Decimal(full_cartons)) * 10  # .5 means 5 items
-            if remaining_items >= items_per_carton:
-                raise forms.ValidationError("Remaining items cannot be greater than or equal to items per carton.")
-            return stock
+        items_per_master_unit = self.cleaned_data.get('items_per_master_unit')
+        if stock and items_per_master_unit:
+            if items_per_master_unit <= 0:
+                raise forms.ValidationError("Items per Master Unit must be a positive number.")
+            try:
+                loose_items = int(round((stock % 1) * 100))
+            except (TypeError, ValueError):
+                # This can happen if stock is not a valid number, though DecimalField should catch it first.
+                raise forms.ValidationError("Invalid format for stock.")
+
+            # The validation check remains the same in principle, but is now correct for the new system.
+            if loose_items >= items_per_master_unit:
+                raise forms.ValidationError(
+                    f"Invalid loose items ({loose_items}). This product has {items_per_master_unit} items per master unit. "
+                    f"Please increase the full master units and adjust the loose items. "
+                    f"For example, for {items_per_master_unit} items, enter 1.00, not 0.{items_per_master_unit}."
+                )
+        return stock
             
 
 
@@ -139,10 +154,10 @@ class AddStockForm(forms.Form):
     """A form to add new stock and set a new expiry date for an existing ProductDetail batch."""
     new_stock_quantity = forms.DecimalField(
         label="New Stock Quantity to Add",
-        max_digits=10, decimal_places=1,
-        validators=[MinValueValidator(Decimal('0.1'))],
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
         help_text="Enter new stock in 'master_unit.item' format (e.g., 5.3 for 5 master units and 3 items).",
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.1', 'placeholder': 'e.g., 10.5'})
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'placeholder': 'e.g., 10.05'})
     )
     new_expiry_date = forms.DateField(
         label="New Expiry Date for this Stock",
@@ -154,6 +169,16 @@ class AddStockForm(forms.Form):
         self.product_detail_instance = kwargs.pop('product_detail_instance', None)
         super().__init__(*args, **kwargs)
 
+    def clean_new_stock_quantity(self):
+        # Validation to ensure loose items don't exceed items_per_master_unit
+        quantity = self.cleaned_data.get('new_stock_quantity')
+        if quantity and self.product_detail_instance:
+            items_per_mu = self.product_detail_instance.items_per_master_unit
+            loose_items = int((quantity % 1) * 100)
+            if loose_items >= items_per_mu:
+                raise forms.ValidationError(f"Loose items ({loose_items}) cannot be equal to or greater than items per master unit ({items_per_mu}). Please add another full master unit.")
+        return quantity
+    
     def clean(self):
         # You could add cross-field validation here if needed, but for now it's simple.
         cleaned_data = super().clean()
@@ -177,10 +202,10 @@ class AddItemToSaleForm(forms.Form):
     # User inputs for this item
     quantity_to_add = forms.DecimalField(
         label="Quantity to Add (e.g., 1.1 for 1 Carton + 1 Item)",
-        max_digits=10, decimal_places=1,
-        validators=[MinValueValidator(Decimal('0.1'))],
-        initial=Decimal('0.1'),
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.1'})
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+        initial=Decimal('0.00'),
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.01'})
     )
     selling_price_per_item = forms.DecimalField(
         label="Selling Price per INDIVIDUAL Item for this batch",
@@ -194,11 +219,33 @@ class AddItemToSaleForm(forms.Form):
         super().__init__(*args, **kwargs)
         if user:
             self.fields['product_detail_batch'].queryset = ProductDetail.objects.filter(
-                user=user, stock__gt=Decimal('0.0') # Only show batches with stock
+                user=user, stock__gt=Decimal('0.00') # Only show batches with stock
             ).select_related('product_base').order_by('product_base__name', 'expirey_date')
-            self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
+            self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} {obj.quantity_in_packing} {obj.unit_of_measure} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
         self.fields['product_detail_batch'].empty_label = "--- Select Product Batch to Add ---"
 
+
+    def clean_quantity_to_add(self):
+        quantity_decimal = self.cleaned_data.get('quantity_to_add')
+        product_detail = self.cleaned_data.get('product_detail_batch')
+
+        if product_detail and quantity_decimal:
+            # Convert input decimal to total items to sell
+            items_to_sell = product_detail._get_items_from_decimal(quantity_decimal)
+            if items_to_sell <= 0:
+                self.add_error('quantity_to_add', "Must specify a quantity to sell.")
+
+            # Validate loose items part of the input
+            loose_items_input = int((quantity_decimal % 1) * 100)
+            if loose_items_input >= product_detail.items_per_master_unit:
+                 raise forms.ValidationError(f"Loose items part ({loose_items_input}) cannot exceed items per master unit ({product_detail.items_per_master_unit}).")
+
+            # Validate against total available stock
+            if items_to_sell > product_detail.total_items_in_stock:
+                self.add_error('quantity_to_add', f"Not enough stock. Available: {product_detail.total_items_in_stock} items.")
+        
+        return quantity_decimal
+    
     def clean(self):
         cleaned_data = super().clean()
         product_detail_batch = cleaned_data.get('product_detail_batch')
@@ -296,8 +343,8 @@ class SalesTransactionItemReturnForm(forms.ModelForm):
         widgets = {
             'returned_quantity_decimal': forms.NumberInput(attrs={
                 'class': 'input input-sm input-bordered w-full',
-                'step': '0.1',
-                'min': '0.0' # Client-side validation
+                'step': '0.01',
+                'min': '0.00' # Client-side validation
             })
         }
         labels = {
@@ -307,7 +354,7 @@ class SalesTransactionItemReturnForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk:
-            self.fields['product_display'].initial = f"{self.instance.product_detail_snapshot.product_base.name} (Exp: {self.instance.expiry_date_at_sale.strftime('%d-%b-%y')})"
+            self.fields['product_display'].initial = f"{self.instance.product_detail_snapshot.product_base.name} {self.instance.product_detail_snapshot.quantity_in_packing} {self.instance.product_detail_snapshot.unit_of_measure}  (Exp: {self.instance.expiry_date_at_sale.strftime('%d-%b-%y')})"
             self.fields['dispatched_quantity_display'].initial = str(self.instance.quantity_sold_decimal)
             # Set max value for returned quantity based on dispatched quantity for this item
             self.fields['returned_quantity_decimal'].widget.attrs['max'] = str(self.instance.quantity_sold_decimal)
@@ -320,13 +367,13 @@ class SalesTransactionItemReturnForm(forms.ModelForm):
     def clean_returned_quantity_decimal(self):
         returned_qty = self.cleaned_data.get('returned_quantity_decimal')
         if returned_qty is None: # If field was optional and left blank
-            returned_qty = Decimal('0.0')
+            returned_qty = Decimal('0.00')
         
         if self.instance and self.instance.pk: # Ensure instance exists (it should for an update)
             dispatched_qty = self.instance.quantity_sold_decimal
             if returned_qty > dispatched_qty:
                 raise forms.ValidationError(f"Returned quantity ({returned_qty}) cannot exceed dispatched quantity ({dispatched_qty}) for this item.")
-            if returned_qty < Decimal('0.0'):
+            if returned_qty < Decimal('0.00'):
                 raise forms.ValidationError("Returned quantity cannot be negative.")
         return returned_qty
 

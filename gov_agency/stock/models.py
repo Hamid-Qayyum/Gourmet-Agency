@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.validators import MinValueValidator
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from django.db.models import Sum
 
 # Create your models here.
@@ -36,10 +36,10 @@ class ProductDetail(models.Model):
     items_per_master_unit = models.PositiveIntegerField(validators=[MinValueValidator(1)],null=False, blank=False,
     help_text="e.g., Number of bottles per PET/Carton, or items per box.")
 
-    price_per_item = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, validators=[MinValueValidator(0.1)],
+    price_per_item = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, validators=[MinValueValidator(0.01)],
     help_text="Price for one individual item (e.g., one bottle, one piece).")
 
-    stock = models.DecimalField(max_digits=10,decimal_places=1, blank=False, null=False, validators=[MinValueValidator(0.1)])
+    stock = models.DecimalField(max_digits=10,decimal_places=2  , blank=False, null=False,default=0.00, validators=[MinValueValidator(0.01)])
     expirey_date = models.DateField(blank=False, null=False, default=date.today() + timedelta(days=30))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -54,116 +54,70 @@ class ProductDetail(models.Model):
         verbose_name_plural = "Product Details/Variants"
 
 
-    @property
-    def total_price_for_master_unit(self):
-        if self.price_per_item and self.items_per_master_unit:
-            return self.price_per_item * self.items_per_master_unit
-        return None    
-
-    @property
-    def total_items_in_stock(self):
-        if self.stock is None or self.items_per_master_unit is None or self.items_per_master_unit <= 0:
+    def _get_items_from_decimal(self, decimal_value: Decimal) -> int:
+        """Converts a decimal like 1.11 into total individual items (e.g., 1*12 + 11 = 23)."""
+        if decimal_value is None or self.items_per_master_unit is None or self.items_per_master_unit <= 0:
             return 0
-        full_master_units = int(self.stock) 
-        decimal_part_as_items = int(round((self.stock % 1) * 10)) 
-        return (full_master_units * self.items_per_master_unit) + decimal_part_as_items
+        full_units = int(decimal_value)
+        # Multiply fractional part by 100 to get items (e.g., 0.11 * 100 = 11)
+        loose_items = int((decimal_value % 1) * 100)
+        return (full_units * self.items_per_master_unit) + loose_items
 
-    
+    def _get_decimal_from_items(self, total_items: int) -> Decimal:
+        """Converts total individual items (e.g., 23) back to decimal format (e.g., 1.11)."""
+        if total_items < 0 or self.items_per_master_unit is None or self.items_per_master_unit <= 0:
+            return Decimal('0.00')
+        full_units = total_items // self.items_per_master_unit
+        loose_items = total_items % self.items_per_master_unit
+        # Format as X.YY
+        return Decimal(full_units) + (Decimal(loose_items) / Decimal(100))
+
+    @property
+    def total_items_in_stock(self) -> int:
+        """Calculates total individual items from the new decimal format."""
+        return self._get_items_from_decimal(self.stock)
+
+    @property
+    def display_stock(self) -> str:
+        """Provides a user-friendly string like '2 Cartons and 7 items'."""
+        if self.stock is None: return "0 items"
+        full_units = int(self.stock)
+        loose_items = int((self.stock % 1) * 100)
+        master_unit_name = self.packing_type + 's'
+        
+        display = ""
+        if full_units > 0:
+            display += f"{full_units} {master_unit_name}"
+        if loose_items > 0:
+            if display: display += " and "
+            display += f"{loose_items} item(s)"
+        return display if display else "0 items"
+
     @property
     def total_price_of_stock(self):
         if self.price_per_item:
             return self.price_per_item * self.total_items_in_stock
-        else:
-            return None
-        
+        return Decimal('0.00')
+    
+    # --- The ONLY stock modification methods you need ---
 
-        
     def decrease_stock(self, quantity_to_sell_decimal: Decimal) -> bool:
-        """
-        Decreases stock by a decimal amount representing master_units.items.
-        e.g., quantity_to_sell_decimal = 1.1 means 1 master unit and 1 item.
-        Returns True if successful, False if not enough stock or invalid input.
-        """
-        if not isinstance(quantity_to_sell_decimal, Decimal) or quantity_to_sell_decimal <= Decimal('0.0'):
-            return False # Invalid quantity
+        """Decreases stock using the 'MasterUnits.IndividualItems' decimal format."""
+        items_to_sell = self._get_items_from_decimal(quantity_to_sell_decimal)
+        if self.total_items_in_stock >= items_to_sell:
+            new_total_items = self.total_items_in_stock - items_to_sell
+            self.stock = self._get_decimal_from_items(new_total_items)
+            self.save()
+            return True
+        return False
 
-        # Convert quantity_to_sell_decimal into total individual items to sell
-        # using the same logic as total_items_in_stock
-        if self.items_per_master_unit is None or self.items_per_master_unit <= 0:
-            return False # Cannot process without items_per_master_unit
-
-        full_master_units_to_sell = int(quantity_to_sell_decimal)
-        decimal_part_as_items_to_sell = int(round((quantity_to_sell_decimal % 1) * Decimal('10.0')))
-        total_individual_items_to_sell = (full_master_units_to_sell * self.items_per_master_unit) + decimal_part_as_items_to_sell
-
-        if self.total_items_in_stock < total_individual_items_to_sell:
-            return False # Not enough stock
-
-        # Now, directly subtract the decimal stock amounts if your system is consistent
-        # If 1.1 sold from 2.7 stock, new stock should be 1.6
-        # This direct subtraction works IF AND ONLY IF your interpretation of the decimal part
-        # is consistently "tenths representing items".
-        
-        # More robust: Convert current stock to total items, subtract items_to_sell, convert back.
-        current_total_items = self.total_items_in_stock
-        new_total_items = current_total_items - total_individual_items_to_sell
-
-        # Convert new_total_items back to your decimal 'stock' representation
-        new_full_master_units = new_total_items // self.items_per_master_unit
-        remaining_loose_items = new_total_items % self.items_per_master_unit
-        
-        new_stock_decimal_part = Decimal(remaining_loose_items) / Decimal('10.0') # e.g. 7 items -> 0.7
-        
-        self.stock = Decimal(new_full_master_units) + new_stock_decimal_part
-        self.save(update_fields=['stock'])
-        return True
-    
     def increase_stock(self, quantity_to_add_decimal: Decimal) -> bool:
-        """
-        Increases stock by a decimal amount representing master_units.items (e.g., returned stock).
-        e.g., quantity_to_add_decimal = 0.2 means 2 items are being added back.
-        Returns True if successful.
-        """
-        if not isinstance(quantity_to_add_decimal, Decimal) or quantity_to_add_decimal < Decimal('0.0'):
-            # Allow adding 0 stock (no return), but not negative.
-            if quantity_to_add_decimal == Decimal('0.0'):
-                return True # No change, but operation is "successful"
-            return False # Invalid quantity
-
-        # Convert quantity_to_add_decimal into total individual items to add
-        if self.items_per_master_unit is None or self.items_per_master_unit <= 0:
-            return False # Cannot process without items_per_master_unit
-
-        full_master_units_to_add = int(quantity_to_add_decimal)
-        # Assumes .1 = 1 item, .2 = 2 items etc. for the decimal part
-        decimal_part_as_items_to_add = int(round((quantity_to_add_decimal % 1) * Decimal('10.0')))
-        total_individual_items_to_add = (full_master_units_to_add * self.items_per_master_unit) + decimal_part_as_items_to_add
-
-        if total_individual_items_to_add < 0: # Should be caught by earlier check but as a safeguard
-            return False
-
-        # Convert current stock to total items, add new items, then convert back to decimal stock format
-        current_total_items = self.total_items_in_stock
-        new_total_items = current_total_items + total_individual_items_to_add
-
-        # Convert new_total_items back to your decimal 'stock' representation
-        new_full_master_units = new_total_items // self.items_per_master_unit
-        remaining_loose_items = new_total_items % self.items_per_master_unit
-        
-        new_stock_decimal_part = Decimal(remaining_loose_items) / Decimal('10.0') # e.g. 7 items -> 0.7
-        
-        self.stock = Decimal(new_full_master_units) + new_stock_decimal_part
-        self.save(update_fields=['stock'])
+        """Increases stock using the 'MasterUnits.IndividualItems' decimal format."""
+        items_to_add = self._get_items_from_decimal(quantity_to_add_decimal)
+        new_total_items = self.total_items_in_stock + items_to_add
+        self.stock = self._get_decimal_from_items(new_total_items)
+        self.save() 
         return True
-    
-    def _get_individual_items_from_decimal(self, decimal_qty: Decimal, items_per_mu: int) -> int:
-        """Helper to convert X.Y decimal (e.g., 1.1 cartons) to total individual items (e.g., 7 items)."""
-        if decimal_qty is None or items_per_mu is None or items_per_mu <= 0:
-            return 0
-        full_units = int(decimal_qty)
-        # Assumes .1 in decimal_qty means 1 item, .2 means 2 items, etc.
-        decimal_part_items = int(round((decimal_qty % 1) * Decimal('10.0')))
-        return (full_units * items_per_mu) + decimal_part_items
 
     
 
@@ -299,15 +253,15 @@ class SalesTransactionItem(models.Model):
     # Which specific product batch was sold for this line item
     product_detail_snapshot = models.ForeignKey(
         'ProductDetail', 
-        on_delete=models.PROTECT, # Prevent deleting ProductDetail if it's part of a sold item.
+        on_delete=models.CASCADE, # Prevent deleting ProductDetail if it's part of a sold item.
                                   # You might need a way to "deactivate" product details instead.
         help_text="The specific product batch (product name, expiry, etc.) sold."
     )
     
     # Quantity of THIS product batch sold, in your "master_unit.item" decimal format (e.g., 1.1)
     quantity_sold_decimal = models.DecimalField(
-        max_digits=10, decimal_places=1,
-        validators=[MinValueValidator(Decimal('0.1'))] 
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))] 
     )
     
     # Prices PER INDIVIDUAL ITEM for this line item, snapshotted at the time of sale
@@ -324,19 +278,34 @@ class SalesTransactionItem(models.Model):
     
     # Quantity returned FOR THIS LINE ITEM (in your "master_unit.item" decimal format)
     returned_quantity_decimal = models.DecimalField(
-        max_digits=10, decimal_places=1,
-        default=Decimal('0.0'),
-        validators=[MinValueValidator(Decimal('0.0'))]
+        max_digits=10, decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))]
     )
-
+    
     def _get_individual_items_from_decimal(self, decimal_qty: Decimal, items_per_mu: int) -> int:
-        """Helper to convert X.Y decimal (e.g., 1.1 cartons) to total individual items (e.g., 7 items)."""
+        """
+        Correctly converts a decimal in the format 'MasterUnits.IndividualItems'
+        (e.g., 12.05) into a total count of individual items.
+        
+        Example:
+        If items_per_mu = 12 (12 bottles in a carton):
+        - A decimal_qty of 2.05 becomes (2 * 12) + 5 = 29 items.
+        - A decimal_qty of 3.11 becomes (3 * 12) + 11 = 47 items.
+        """
         if decimal_qty is None or items_per_mu is None or items_per_mu <= 0:
             return 0
+        
+        # The integer part represents the full master units.
         full_units = int(decimal_qty)
-        # Assumes .1 in decimal_qty means 1 item, .2 means 2 items, etc.
-        decimal_part_items = int(round((decimal_qty % 1) * Decimal('10.0')))
-        return (full_units * items_per_mu) + decimal_part_items
+        
+        # The fractional part represents the loose individual items.
+        # To get them, we multiply by 100 and round to handle potential floating point inaccuracies.
+        # e.g., for 12.05, (12.05 % 1) is ~0.05.  0.05 * 100 = 5.
+        # e.g., for 3.11, (3.11 % 1) is ~0.11.  0.11 * 100 = 11.
+        loose_items = int(round((decimal_qty % 1) * 100))
+        
+        return (full_units * items_per_mu) + loose_items
 
     @property
     def dispatched_individual_items_count(self) -> int:
@@ -369,6 +338,20 @@ class SalesTransactionItem(models.Model):
         return self.total_item_final_revenue - self.total_item_final_cost
 
     def save(self, *args, **kwargs):
+
+
+        update_parent = False
+        if self.pk is None: # This is a new item being created
+            update_parent = True
+        else:
+            # This is an existing item. Fetch its original state from the DB.
+            original_instance = SalesTransactionItem.objects.get(pk=self.pk)
+            # Check if the fields that impact financial totals have changed.
+            if (original_instance.returned_quantity_decimal != self.returned_quantity_decimal or
+                original_instance.quantity_sold_decimal != self.quantity_sold_decimal or
+                original_instance.selling_price_per_item != self.selling_price_per_item):
+                update_parent = True
+                
         # Populate snapshot fields if it's a new item and product_detail_snapshot is set
         if not self.pk and self.product_detail_snapshot:
             self.expiry_date_at_sale = self.product_detail_snapshot.expirey_date
@@ -378,18 +361,17 @@ class SalesTransactionItem(models.Model):
 
         # Calculate totals based on dispatched quantity for this line item
         dispatched_items_count = self._get_individual_items_from_decimal(
-            self.quantity_sold_decimal or Decimal('0.0'),
+            self.quantity_sold_decimal or Decimal('0.00'),
             self.items_per_master_unit_at_sale or (self.product_detail_snapshot.items_per_master_unit if self.product_detail_snapshot else 0)
         )
         self.total_item_dispatched_revenue = dispatched_items_count * (self.selling_price_per_item or Decimal('0.0'))
         self.total_item_dispatched_cost = dispatched_items_count * (self.cost_price_per_item_at_sale or Decimal('0.0'))
         
-        is_new_item_or_quantity_changed = self.pk is None or self._state.adding # or check if relevant fields changed
-        
+
         super().save(*args, **kwargs)
 
-        # After saving this item, update the parent SalesTransaction's totals
-        if self.transaction and is_new_item_or_quantity_changed: # Only update if it's new or relevant fields changed
+        # After saving this item, update the parent SalesTransaction's totals if needed
+        if self.transaction and update_parent:
             self.transaction.update_grand_totals()
 
     def __str__(self):

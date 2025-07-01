@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     'django.templatetags',
     'accounts',
+    'claim',
 
 ]
 

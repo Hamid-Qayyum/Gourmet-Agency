@@ -57,7 +57,7 @@
                     <th>Qty</th>
                     <th>Items/Master</th>
                     <th>Price/Item</th>
-                    <th>Total Price of Packing</th>
+                    {% comment %} <th>Total Price of Packing</th> {% endcomment %}
                     <th>Exp</th>
                     <th>Total Items</th>
                     <th>Stock</th>
@@ -88,7 +88,7 @@
                     <td class="quantity-in-packing">{{ detail.quantity_in_packing|floatformat:2 }}&nbsp;{{ detail.unit_of_measure }}</td>
                     <td class="items-per-master-unit">{{ detail.items_per_master_unit }}</td>
                     <td class="price-per-item">Rs&nbsp;{{ detail.price_per_item|floatformat:2 }}</td>
-                    <td class=" font-semibold">Rs&nbsp;{{ detail.total_price_for_master_unit|floatformat:2 }}</td>
+                    {% comment %} <td class=" font-semibold">Rs&nbsp;{{ detail.total_price_for_master_unit|floatformat:2 }}</td> {% endcomment %}
                     <td class="text-red-500">{{detail.expirey_date}}</td>
                     <td>{{detail.total_items_in_stock}}</td>
                     <td>{{detail.stock}}</td>
@@ -250,7 +250,7 @@
                     
                     <div class="form-control w-full">
                         <label class="label" for="id_new_stock_quantity"><span class="label-text font-medium">New Stock Quantity to Add</span></label>
-                        <input type="number" name="new_stock_quantity" step="0.1" class="input input-bordered w-full" placeholder="e.g., 10.5" required id="id_new_stock_quantity">
+                        <input type="number" name="new_stock_quantity" step="0.01" class="input input-bordered w-full" placeholder="e.g., 10.5" required id="id_new_stock_quantity">
                          <div class="label"><span class="label-text-alt">Enter in 'Carton.Item' format (e.g., 5.3 for 5 cartons and 3 items).</span></div>
                     </div>
                     <div class="form-control w-full">
