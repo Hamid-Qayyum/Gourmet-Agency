@@ -73,7 +73,6 @@
                 
                 {% if payment_form.non_field_errors %}
                     <div role="alert" class="alert alert-error text-sm p-3 mb-4">
-                        <svg><!-- error icon --></svg>
                         <div>{% for error in payment_form.non_field_errors %}{{ error }}{% endfor %}</div>
                     </div>
                 {% endif %}

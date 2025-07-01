@@ -138,7 +138,9 @@ def add_product_details(request):
 
     if query:
         product_details_qs = product_details_qs.filter(
-            Q(product_base__name__icontains=query)
+            Q(product_base__name__icontains=query)|
+            Q(packing_type__icontains=query)|
+            Q(notes__icontains=query)
         )
 
     # Check if the current user has any base products to select from for the form
@@ -188,21 +190,27 @@ def product_detail_update_view(request, pk):
 
 @login_required
 def add_stock_to_product_detail_view(request, pk):
+    # Get the ProductDetail instance, ensuring user ownership
     product_detail = get_object_or_404(ProductDetail, pk=pk, user=request.user)
+    
     if request.method == 'POST':
         form = AddStockForm(request.POST, product_detail_instance=product_detail)
         if form.is_valid():
             new_stock_quantity = form.cleaned_data['new_stock_quantity']
             new_expiry_date = form.cleaned_data['new_expiry_date']
+
             try:
                 with transaction.atomic():
+                    # Check if a batch with the exact same new expiry date already exists for this product
                     existing_batch =  ProductDetail.objects.select_for_update().get(pk=pk, user=request.user)
                     if existing_batch:
+                        # Add stock to the existing batch with the same expiry date
                         existing_batch.increase_stock(new_stock_quantity)   
                         existing_batch.expirey_date = new_expiry_date
                         existing_batch.save(update_fields=['stock', 'expirey_date', 'updated_at'])
                         messages.success(request, f"Added {new_stock_quantity} stock to existing batch of {existing_batch.product_base.name} (Exp: {new_expiry_date}). New stock: {existing_batch.stock}.")
                     else:
+                        # Create a new ProductDetail instance for the new batch
                         new_batch = ProductDetail.objects.create(
                             product_base=product_detail.product_base,
                             user=request.user,
@@ -220,10 +228,13 @@ def add_stock_to_product_detail_view(request, pk):
             except Exception as e:
                 messages.error(request, f"An error occurred while adding stock: {str(e)}")
         else:
+            # This is tricky for a modal. We redirect with a generic error.
+            # A better UX would use AJAX for this form submission.
             error_string = ". ".join([f"{field}: {', '.join(errors)}" for field, errors in form.errors.items()])
             messages.error(request, f"Failed to add stock. {error_string}")
             return redirect('stock:add_product_details')
-
+    
+    # This view is for POST only from the modal
     return redirect('stock:add_product_details')
 
 
@@ -501,14 +512,7 @@ def pending_deliveries_view(request):
 
 @login_required
 def process_delivery_return_view(request, sale_pk):
-    """
-    Handles the processing of a pending delivery. This includes:
-    1. Recording returned quantities for each item in the transaction.
-    2. Increasing the stock in ProductDetail for any returned items.
-    3. Updating the transaction's payment type, grand totals (revenue, cost, profit), and status.
-    4. Updating the associated financial ledger entry.
-    """
-    # Fetch the parent transaction, ensuring it's in a processable state and belongs to the user
+    # Get the single source-of-truth object for this transaction at the start.
     sales_transaction = get_object_or_404(
         SalesTransaction, 
         pk=sale_pk, 
@@ -516,78 +520,95 @@ def process_delivery_return_view(request, sale_pk):
         status__in=['PENDING_DELIVERY', 'PARTIALLY_RETURNED']
     )
     
-    # Get the queryset of items related to this specific transaction for the formset
+    # The queryset for the formset is based on this single transaction instance.
     items_queryset = SalesTransactionItem.objects.filter(transaction=sales_transaction)
 
     if request.method == 'POST':
+        # Initialize forms with POST data and the correct instances.
         return_formset = SalesTransactionItemReturnFormSet(request.POST, queryset=items_queryset)
         payment_form = UpdatePaymentTypeForm(request.POST, instance=sales_transaction)
 
         if return_formset.is_valid() and payment_form.is_valid():
             try:
                 with transaction.atomic():
-                    # --- 1. SAVE THE RETURN QUANTITIES ---
-                    # First, save the formset. This updates the `returned_quantity_decimal` on each
-                    # SalesTransactionItem instance in the database.
-                    returned_items = return_formset.save()
+                    # --- Step 1: Process and save item returns and adjust stock ---
+                    # We will loop and save each item individually to ensure stock is updated correctly.
+                    # get_object_or_404 ensures we are only working on items for this transaction.
+                    for form in return_formset:
+                        if form.has_changed() and 'returned_quantity_decimal' in form.changed_data:
+                            item_pk = form.instance.pk
+                            item_instance = get_object_or_404(SalesTransactionItem, pk=item_pk, transaction=sales_transaction)
+                            
+                            original_returned_quantity = item_instance.returned_quantity_decimal
+                            new_returned_quantity = form.cleaned_data['returned_quantity_decimal']
+                            
+                            stock_change_difference = new_returned_quantity - original_returned_quantity
+                            
+                            if stock_change_difference != Decimal('0.0'):
+                                product_detail_to_update = item_instance.product_detail_snapshot
+                                if stock_change_difference > 0:
+                                    if not product_detail_to_update.increase_stock(stock_change_difference):
+                                        raise Exception(f"Failed to increase stock for {product_detail_to_update.product_base.name}.")
+                                else:
+                                    if not product_detail_to_update.decrease_stock(abs(stock_change_difference)):
+                                        raise Exception(f"Failed to decrease stock for {product_detail_to_update.product_base.name}.")
+                            
+                            # Save the new returned quantity to the item
+                            item_instance.returned_quantity_decimal = new_returned_quantity
+                            item_instance.save(update_fields=['returned_quantity_decimal'])
 
-                    # --- 2. UPDATE STOCK FOR EACH RETURNED ITEM ---
-                    # Now, loop through the saved items and increase stock accordingly.
-                    for item_instance in returned_items:
-                        product_detail_to_update = item_instance.product_detail_snapshot
-                        returned_quantity = item_instance.returned_quantity_decimal
-
-                        # Add the returned quantity back to the product's inventory.
-                        if returned_quantity and returned_quantity > Decimal('0.0'):
-                            if not product_detail_to_update.increase_stock(returned_quantity):
-                                # This is a safeguard; `increase_stock` should ideally not fail.
-                                raise Exception(f"Failed to add returned stock for {product_detail_to_update.product_base.name}.")
-
-                    # --- 3. UPDATE GRAND TOTALS (REVENUE & PROFIT) ---
-                    # Now that all items are updated and stock is adjusted,
-                    # explicitly tell the parent transaction to recalculate its totals.
+                    # --- Step 2: Recalculate and Save Grand Totals for the Transaction ---
+                    # Now that all items are updated, explicitly tell the parent transaction to update itself.
+                    # We call the method which will calculate and save.
                     sales_transaction.update_grand_totals()
-                    sales_transaction.refresh_from_db() # Get the latest saved values
 
-                    # --- 4. UPDATE OVERALL TRANSACTION STATUS & PAYMENT ---
-                    payment_form.save() # Update payment type
+                    # --- Step 3: Update the Payment Type and Status ---
+                    # We re-fetch the transaction object to ensure we have the latest totals before proceeding.
+                    final_transaction_state = SalesTransaction.objects.get(pk=sale_pk)
+
+                    # Get the new payment type from the validated form
+                    new_payment_type = payment_form.cleaned_data['payment_type']
+                    final_transaction_state.payment_type = new_payment_type
                     
-                    # Determine final status based on the final state of the items
-                    total_dispatched = sum(item.dispatched_individual_items_count for item in returned_items)
-                    total_returned = sum(item.returned_individual_items_count for item in returned_items)
+                    # Determine the new status based on the final item states
+                    final_items = final_transaction_state.items.all()
+                    total_dispatched = sum(item.dispatched_individual_items_count for item in final_items)
+                    total_returned = sum(item.returned_individual_items_count for item in final_items)
 
                     if total_returned == 0:
-                        sales_transaction.status = 'COMPLETED'
+                        final_transaction_state.status = 'COMPLETED'
                     elif total_returned >= total_dispatched:
-                        sales_transaction.status = 'FULLY_RETURNED'
+                        final_transaction_state.status = 'FULLY_RETURNED'
                     else:
-                        sales_transaction.status = 'PARTIALLY_RETURNED'
+                        final_transaction_state.status = 'PARTIALLY_RETURNED'
                     
-                    sales_transaction.save(update_fields=['status', 'payment_type'])
+                    # Save the final status and payment type in one operation.
+                    final_transaction_state.save(update_fields=['status', 'payment_type'])
 
-                    # --- 5. UPDATE FINANCIAL LEDGER ENTRY ---
-                    # This logic correctly updates the ledger based on the new grand_total_revenue
-                    existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=sales_transaction).first()
-                    final_revenue = sales_transaction.grand_total_revenue
-
-                    if sales_transaction.payment_type == 'CREDIT' and sales_transaction.customer_shop:
+                    # --- Step 4: Update Financial Ledger Entry ---
+                    # Use the final transaction state for all ledger operations
+                    existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=final_transaction_state).first()
+                    final_revenue = final_transaction_state.grand_total_revenue
+                    
+                    if final_transaction_state.payment_type == 'CREDIT' and final_transaction_state.customer_shop:
                         if existing_credit_entry:
                             existing_credit_entry.debit_amount = final_revenue
                             existing_credit_entry.save(update_fields=['debit_amount'])
                         else:
                             ShopFinancialTransaction.objects.create(
-                                shop=sales_transaction.customer_shop, user=request.user,
-                                source_sale=sales_transaction, transaction_type='CREDIT_SALE',
+                                shop=final_transaction_state.customer_shop, user=request.user,
+                                source_sale=final_transaction_state, transaction_type='CREDIT_SALE',
                                 debit_amount=final_revenue
                             )
-                    elif sales_transaction.payment_type != 'CREDIT' and existing_credit_entry:
+                    elif final_transaction_state.payment_type != 'CREDIT' and existing_credit_entry:
                         existing_credit_entry.delete()
 
-                    messages.success(request, f"Delivery for Transaction #{sales_transaction.pk} processed. Stock and totals have been updated.")
+                    messages.success(request, f"Delivery for Transaction #{final_transaction_state.pk} processed. Status: '{final_transaction_state.get_status_display()}'.")
                     return redirect('stock:pending_deliveries')
+
             except Exception as e:
                 messages.error(request, f"A critical error occurred: {str(e)}")
-        else:
+        else: # Forms are not valid
             messages.error(request, "Please correct the errors shown below.")
     
     # For GET request or if POST had errors
