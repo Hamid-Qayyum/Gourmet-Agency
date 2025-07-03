@@ -85,7 +85,7 @@
                         {% if item.returned_quantity_decimal > 0 %}
                             <br><span style="color:red; font-size:0.8em;">(-{{ item.returned_quantity_decimal }})</span>
                             <hr style="border-top: 1px solid #ccc; margin: 1px 0;">
-                            {{ item.quantity_sold_decimal|subtract:item.returned_quantity_decimal|floatformat:"-1g" }} <!-- Net Qty -->
+                            {{ item.quantity_sold_decimal }} <!-- Net Qty -->
                         {% endif %}
                     </td>
                     <td class="price">Rs {{ item.selling_price_per_item|floatformat:2 }}</td>

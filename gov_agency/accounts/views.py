@@ -4,6 +4,8 @@ from django.db.models import Sum, Q, F, ExpressionWrapper, DecimalField
 from decimal import Decimal
 from django.http import JsonResponse
 from django.contrib import messages
+from django.contrib.auth.models import User 
+
 
 
 
@@ -16,7 +18,7 @@ from .forms import ReceiveCashForm, EditFinancialTransactionForm # Import the ne
 @login_required
 def transactions_hub_view(request):
     # Fetch all active vehicles. Can be scoped to user if vehicles are user-specific.
-    vehicles = Vehicle.objects.filter(is_active=True).order_by('vehicle_number')
+    vehicles = Vehicle.objects.filter(is_active=True, user=request.user ).order_by('vehicle_number')
     
     context = {
         'vehicles': vehicles,
@@ -29,12 +31,13 @@ def vehicle_ledger_summary_view(request, vehicle_pk):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_pk) # Can add user filter if needed
 
     # Find unique shops that had sales assigned to this vehicle
-    associated_shops = Shop.objects.filter(
+    associated_shops = Shop.objects.filter(user=request.user,
         shop_sales_transactions__assigned_vehicle=vehicle
     ).distinct().order_by('name')
 
     # Find unique manual customers that had sales assigned to this vehicle
     manual_customers_for_vehicle = SalesTransaction.objects.filter(
+        user = request.user,
         assigned_vehicle=vehicle,
         customer_shop__isnull=True,
         customer_name_manual__isnull=False
@@ -62,12 +65,13 @@ def vehicle_ledger_summary_view(request, vehicle_pk):
 @login_required
 def store_ledger_summary_view(request):
     # Find unique shops that had sales with NO vehicle assigned
-    associated_shops = Shop.objects.filter(
-        shop_sales_transactions__assigned_vehicle__isnull=True
+    associated_shops = Shop.objects.filter(user = request.user,
+    shop_sales_transactions__assigned_vehicle__isnull=True
     ).distinct().order_by('name')
 
     # Find unique manual customers that had sales with NO vehicle
     manual_customers_for_store = SalesTransaction.objects.filter(
+        user=request.user,
         assigned_vehicle__isnull=True,
         customer_shop__isnull=True,
         customer_name_manual__isnull=False

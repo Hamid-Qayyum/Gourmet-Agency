@@ -13,7 +13,7 @@ from .forms import ClaimForm
 # 1. The Hub View (lists vehicles and store)
 @login_required
 def claims_hub_view(request):
-    vehicles = Vehicle.objects.filter(is_active=True) # Or filter by user if needed
+    vehicles = Vehicle.objects.filter(is_active=True, user=request.user) # Or filter by user if needed
     context = {
         'vehicles': vehicles,
     }

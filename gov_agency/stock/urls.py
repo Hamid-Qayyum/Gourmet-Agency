@@ -27,6 +27,7 @@ urlpatterns = [
    path('sales/', views.sales_processing_view, name="sales"),
    path('sales/ajax/get-batch-info/<int:pk>/', views.ajax_get_batch_details_for_sale, name='ajax_get_batch_info_for_sale'),
    path('transactions/all/', views.all_transactions_list_view, name='all_transactions_list'),
+   path('transactions/export/', views.export_sales_to_excel, name='export_sales_to_excel'),
    path('update-note/', views.update_note, name='update_note'),
    path('sales/pending-deliveries/', views.pending_deliveries_view, name='pending_deliveries'),
    path('sales/process-delivery/<int:sale_pk>/', views.process_delivery_return_view, name='process_delivery_return'),

@@ -20,6 +20,10 @@ import json
 from django.db.models.functions import TruncMonth,TruncDay
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.urls import resolve
+from django.http import HttpResponse
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font
 
 
 
@@ -450,8 +454,22 @@ def all_transactions_list_view(request):
         'items__product_detail_snapshot__product_base' # For product summary
     ).order_by('-transaction_time')
 
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    if start_date and not end_date:
+        # **Special Case**: If only start_date is provided, filter for that single day.
+        # The '__date' lookup matches the date part of a DateTimeField.
+        transactions_list = transactions_list.filter(transaction_time__date=start_date)
+    else:
+        # Standard range filter: apply if dates are present.
+        # This works if both are present, or if only end_date is present.
+        if start_date:
+            transactions_list = transactions_list.filter(transaction_time__date__gte=start_date)
+        if end_date:
+            transactions_list = transactions_list.filter(transaction_time__date__lte=end_date)
     # Pagination (optional, but good for long lists)
-    paginator = Paginator(transactions_list, 25) # Show 25 transactions per page
+    paginator = Paginator(transactions_list, 50) # Show 50 transactions per page
     page_number = request.GET.get('page')
     try:
         page_obj = paginator.page(page_number)
@@ -466,6 +484,103 @@ def all_transactions_list_view(request):
         'transactions': page_obj.object_list, # The transactions for the current page
     }
     return render(request, 'stock/all_transactions_list.html', context)
+
+
+@login_required
+def export_sales_to_excel(request):
+    """
+    Handles the export of sales transactions to an Excel (.xlsx) file.
+    It reuses the same filtering logic as the main list view.
+    """
+    # 1. Reuse the exact same data fetching and filtering logic from your list view
+    #    but WITHOUT pagination.
+    transactions_list = SalesTransaction.objects.filter(user=request.user)
+
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    if start_date and not end_date:
+        transactions_list = transactions_list.filter(transaction_time__date=start_date)
+    else:
+        if start_date:
+            transactions_list = transactions_list.filter(transaction_time__date__gte=start_date)
+        if end_date:
+            transactions_list = transactions_list.filter(transaction_time__date__lte=end_date)
+
+    # Apply optimizations and ordering
+    transactions_list = transactions_list.select_related(
+        'customer_shop', 'assigned_vehicle'
+    ).order_by('-transaction_time')
+
+    # 2. Create the Excel Workbook and Worksheet in memory
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Sales Report"
+
+    # 3. Define the Headers and add them to the first row
+    columns = [
+        "Tx ID", "Date", "Time", "Customer", "Payment", "Status",
+        "Total Revenue", "Total Profit", "Notes",  # Transaction-level info
+        "Product Name","Price Per Unit" ,"Quantity Sold", "Returned" ,"Unit", # Item-level info
+    ]
+    ws.append(columns)
+
+    # Style the header row (bold font)
+    bold_font = Font(bold=True)
+    for col_num, column_title in enumerate(columns, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.font = bold_font
+
+    # 4. Loop through the queryset and append data rows
+    for tx in transactions_list:
+        # Using .all() on a prefetched queryset is free, no DB hit here.
+        all_items = tx.items.all()
+        customer_name = tx.customer_shop.name if tx.customer_shop else tx.customer_name_manual or "N/A"
+
+        for item in all_items:
+            row = [
+                tx.pk,
+                tx.transaction_time.date(),
+                tx.transaction_time.time().strftime('%H:%M:%S'),
+                customer_name,
+                tx.get_payment_type_display(),
+                tx.get_status_display(),
+                f'Rs {tx.grand_total_revenue}',
+                f'Rs {tx.calculated_grand_profit}',
+                tx.notes,
+                item.product_detail_snapshot.product_base.name,
+                f'{item.product_detail_snapshot.price_per_item}',
+                f'{item.quantity_sold_decimal}',
+                f'{item.returned_quantity_decimal}',
+                f'{item.product_detail_snapshot.quantity_in_packing} {item.product_detail_snapshot.unit_of_measure}',
+            ]
+            ws.append(row)
+
+
+    # 5. Auto-size columns for better readability
+    for col_num, column_title in enumerate(columns, 1):
+        column_letter = get_column_letter(col_num)
+        ws.column_dimensions[column_letter].autosize = True
+
+    # 6. Prepare the HTTP response to serve the file
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    # Define a dynamic filename
+    filename = "sales_report.xlsx"
+    if start_date and end_date:
+        filename = f"sales_{start_date}_to_{end_date}.xlsx"
+    elif start_date:
+        filename = f"sales_{start_date}.xlsx"
+        
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+
+    # Save the workbook to the response
+    wb.save(response)
+
+    return response
+
+
 
 
 @login_required
@@ -557,6 +672,9 @@ def process_delivery_return_view(request, sale_pk):
                             item_instance.returned_quantity_decimal = new_returned_quantity
                             item_instance.save(update_fields=['returned_quantity_decimal'])
 
+                            # item_instance.quantity_sold_decimal = item_instance.quantity_sold_decimal - new_returned_quantity
+                            # item_instance.save(update_fields=['quantity_sold_decimal'])
+
                     # --- Step 2: Recalculate and Save Grand Totals for the Transaction ---
                     # Now that all items are updated, explicitly tell the parent transaction to update itself.
                     # We call the method which will calculate and save.
@@ -619,8 +737,8 @@ def process_delivery_return_view(request, sale_pk):
     context = {
         'return_formset': return_formset,
         'payment_form': payment_form,
-        'transaction': sales_transaction,
-    }
+        'transaction': sales_transaction
+                }
     return render(request, 'stock/process_delivery_return.html', context)
 
 
