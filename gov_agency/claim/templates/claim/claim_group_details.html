@@ -19,7 +19,8 @@
             <h1 class="text-2xl font-bold">{{ grouping_name }}</h1>
             <a href="{% url 'claim:claims_hub' %}" class="text-sm link link-hover text-primary">← Back to Claims Hub</a>
         </div>
-        <label for="add_claim_modal_checkbox" class="btn btn-primary mt-4 sm:mt-0">
+        <label for="add_claim_modal_checkbox" id="addNewClaimButton" class="btn btn-primary mt-4 sm:mt-0"
+            data-vehicle-pk="{{ vehicle_pk_for_form|default_if_none:'0' }}">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
             Add New Claim
         </label>
@@ -171,6 +172,20 @@ document.addEventListener('DOMContentLoaded', function () {
             // be a fresh load without form errors pre-filled.
             if (!this.checked) { 
                 addClaimForm.reset(); 
+            }
+        });
+    }
+
+    const addNewClaimButton = document.getElementById('addNewClaimButton');
+
+    if (addNewClaimButton) {
+        addNewClaimButton.addEventListener('click', function() {
+            const vehiclePk = this.dataset.vehiclePk;
+            console.log(vehiclePk)
+            const vehicleSelectField = addClaimForm.querySelector('[name="retrieval_vehicle"]');
+
+            if (vehicleSelectField && vehiclePk && vehiclePk !== '0') {
+                vehicleSelectField.value = vehiclePk;
             }
         });
     }

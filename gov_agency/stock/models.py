@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_DOWN
 from django.db.models import Sum
@@ -208,17 +208,14 @@ class SalesTransaction(models.Model):
 
     def update_grand_totals(self):
         """
-        Recalculates grand totals based on all its items by iterating 
-        and summing the item's calculated final revenue and cost properties.
+        Recalculates grand totals based on all its items.
+        This works correctly as it relies on item.total_item_final_revenue which now includes discounts.
         """
-        items_queryset = self.items.all()  # Get all related SalesTransactionItem instances
+        items_queryset = self.items.all()
         
-        new_grand_total_revenue = Decimal('0.00')
-        new_grand_total_cost = Decimal('0.00')
-
-        for item in items_queryset:
-            new_grand_total_revenue += item.total_item_final_revenue  # Use the @property
-            new_grand_total_cost += item.total_item_final_cost      # Use the @property
+        # Using list comprehension with a fallback for potential None values.
+        new_grand_total_revenue = sum([item.total_item_final_revenue for item in items_queryset]) or Decimal('0.00')
+        new_grand_total_cost = sum([item.total_item_final_cost for item in items_queryset]) or Decimal('0.00')
         
         changed = False
         if self.grand_total_revenue != new_grand_total_revenue:
@@ -230,6 +227,11 @@ class SalesTransaction(models.Model):
         
         if changed:
             self.save(update_fields=['grand_total_revenue', 'grand_total_cost'])
+
+    @property
+    def total_discount_amount(self):
+        """Calculates the total monetary discount for the entire transaction based on final sold items."""
+        return sum(item.total_discount_amount for item in self.items.all()) or Decimal('0.00')
 
     @property
     def calculated_grand_profit(self):
@@ -266,6 +268,12 @@ class SalesTransactionItem(models.Model):
     
     # Prices PER INDIVIDUAL ITEM for this line item, snapshotted at the time of sale
     selling_price_per_item = models.DecimalField(max_digits=10, decimal_places=2)
+
+    discount_percentage = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))],
+        help_text="Discount percentage for this item (e.g., 5 for 5%)."
+    )
     cost_price_per_item_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
 
     # Snapshot details from ProductDetail for this line item (important for historical accuracy)
@@ -284,61 +292,50 @@ class SalesTransactionItem(models.Model):
     )
     
     def _get_individual_items_from_decimal(self, decimal_qty: Decimal, items_per_mu: int) -> int:
-        """
-        Correctly converts a decimal in the format 'MasterUnits.IndividualItems'
-        (e.g., 12.05) into a total count of individual items.
-        
-        Example:
-        If items_per_mu = 12 (12 bottles in a carton):
-        - A decimal_qty of 2.05 becomes (2 * 12) + 5 = 29 items.
-        - A decimal_qty of 3.11 becomes (3 * 12) + 11 = 47 items.
-        """
-        if decimal_qty is None or items_per_mu is None or items_per_mu <= 0:
-            return 0
-        
-        # The integer part represents the full master units.
+        if decimal_qty is None or items_per_mu is None or items_per_mu <= 0: return 0
         full_units = int(decimal_qty)
-        
-        # The fractional part represents the loose individual items.
-        # To get them, we multiply by 100 and round to handle potential floating point inaccuracies.
-        # e.g., for 12.05, (12.05 % 1) is ~0.05.  0.05 * 100 = 5.
-        # e.g., for 3.11, (3.11 % 1) is ~0.11.  0.11 * 100 = 11.
         loose_items = int(round((decimal_qty % 1) * 100))
-        
         return (full_units * items_per_mu) + loose_items
 
     @property
     def dispatched_individual_items_count(self) -> int:
-        """Total individual items initially dispatched for this line item."""
         return self._get_individual_items_from_decimal(self.quantity_sold_decimal, self.items_per_master_unit_at_sale)
 
     @property
     def returned_individual_items_count(self) -> int:
-        """Total individual items returned for this line item."""
         return self._get_individual_items_from_decimal(self.returned_quantity_decimal, self.items_per_master_unit_at_sale)
 
     @property
     def actual_sold_individual_items_count(self) -> int:
-        """Net individual items actually sold after returns for this line item."""
         return self.dispatched_individual_items_count - self.returned_individual_items_count
 
     @property
     def total_item_final_revenue(self) -> Decimal:
-        """Final revenue for this line item after considering returns."""
-        return Decimal(self.actual_sold_individual_items_count) * self.selling_price_per_item
+        """Final revenue for this line item after considering returns AND discount."""
+        gross_revenue = Decimal(self.actual_sold_individual_items_count) * self.selling_price_per_item
+        discount_multiplier = Decimal('1.00') - (self.discount_percentage / Decimal('100.00'))
+        return (gross_revenue * discount_multiplier).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
 
     @property
     def total_item_final_cost(self) -> Decimal:
         """Final cost for this line item after considering returns."""
-        return Decimal(self.actual_sold_individual_items_count) * self.cost_price_per_item_at_sale
+        return (Decimal(self.actual_sold_individual_items_count) * self.cost_price_per_item_at_sale).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
         
     @property
     def line_item_profit(self) -> Decimal:
-        """Profit for this line item after considering returns."""
+        """Profit for this line item after considering returns and discount."""
         return self.total_item_final_revenue - self.total_item_final_cost
 
-    def save(self, *args, **kwargs):
+    @property
+    def total_discount_amount(self) -> Decimal:
+        """The total monetary value of the discount for the items finally sold."""
+        gross_revenue = Decimal(self.actual_sold_individual_items_count) * self.selling_price_per_item
+        discount_amount = gross_revenue * (self.discount_percentage / Decimal('100.00'))
+        return discount_amount.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
 
+
+
+    def save(self, *args, **kwargs):
 
         update_parent = False
         if self.pk is None: # This is a new item being created
@@ -359,15 +356,20 @@ class SalesTransactionItem(models.Model):
             # cost_price_per_item_at_sale should be set from ProductDetail when item is added to sale (in view/form)
             # selling_price_per_item should be set from user input when item is added to sale (in view/form)
 
-        # Calculate totals based on dispatched quantity for this line item
+        
+        
+        # Calculate totals based on dispatched quantity for this line item, including discount
         dispatched_items_count = self._get_individual_items_from_decimal(
             self.quantity_sold_decimal or Decimal('0.00'),
             self.items_per_master_unit_at_sale or (self.product_detail_snapshot.items_per_master_unit if self.product_detail_snapshot else 0)
         )
-        self.total_item_dispatched_revenue = dispatched_items_count * (self.selling_price_per_item or Decimal('0.0'))
-        self.total_item_dispatched_cost = dispatched_items_count * (self.cost_price_per_item_at_sale or Decimal('0.0'))
         
-
+        gross_dispatched_revenue = dispatched_items_count * (self.selling_price_per_item or Decimal('0.0'))
+        discount_multiplier = Decimal('1.00') - ((self.discount_percentage or Decimal('0.0')) / Decimal('100.00'))
+        
+        # total_item_dispatched_revenue is now the NET revenue after discount
+        self.total_item_dispatched_revenue = (gross_dispatched_revenue * discount_multiplier).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+        self.total_item_dispatched_cost = (dispatched_items_count * (self.cost_price_per_item_at_sale or Decimal('0.0'))).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
         super().save(*args, **kwargs)
 
         # After saving this item, update the parent SalesTransaction's totals if needed

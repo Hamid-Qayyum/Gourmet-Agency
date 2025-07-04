@@ -262,9 +262,9 @@ def sales_processing_view(request):
                 product_detail_batch = add_item_form.cleaned_data['product_detail_batch']
                 quantity_to_add = add_item_form.cleaned_data['quantity_to_add']
                 selling_price_item = add_item_form.cleaned_data['selling_price_per_item']
-
+                discount_perc = add_item_form.cleaned_data.get('discount_percentage') or Decimal('0.00')
                 current_items = request.session.get(current_transaction_items_session_key, [])
-                
+
                 # Check if this exact product_detail_batch is already in the cart
                 item_found = False
                 for item in current_items:
@@ -278,19 +278,26 @@ def sales_processing_view(request):
                         break
                 
                 if not item_found:
+                    individual_items_count = product_detail_batch._get_items_from_decimal(quantity_to_add)
+                    # 2. Calculate the price before discount
+                    gross_subtotal = individual_items_count * selling_price_item
+                    # 3. Calculate the discount multiplier (e.g., 5% off is a 0.95 multiplier)
+                    discount_multiplier = Decimal('1.00') - (discount_perc / Decimal('100.00'))
+                    # 4. Define net_subtotal by applying the discount
+                    net_subtotal = gross_subtotal * discount_multiplier
                     current_items.append({
                         'product_detail_id': product_detail_batch.id,
                         'product_display_name': f"{product_detail_batch.product_base.name} (Exp: {product_detail_batch.expirey_date.strftime('%d-%b-%Y')})",
-                        'quantity_decimal': str(quantity_to_add), # Store as string "1.1"
+                        'quantity_decimal': str(quantity_to_add),
                         'selling_price_per_item': str(selling_price_item),
-                        'cost_price_per_item': str(product_detail_batch.price_per_item), # Your cost
+                        'discount_percentage': str(discount_perc), # <-- Add discount to session
+                        'cost_price_per_item': str(product_detail_batch.price_per_item),
                         'items_per_master_unit': product_detail_batch.items_per_master_unit,
-                        # Calculated subtotal for display in cart
-                        # Requires converting quantity_decimal to individual items
-                        'line_subtotal': str(product_detail_batch._get_items_from_decimal(quantity_to_add) * selling_price_item)
+                        'line_subtotal': str(net_subtotal.quantize(Decimal('0.01'))) # Store discounted subtotal
                     })
                     messages.success(request, f"Added {quantity_to_add} of {product_detail_batch.product_base.name} to transaction.")
-                
+                else:
+                    messages.warning(request, f"{product_detail_batch.product_base.name} is already in the list. Remove to re-add with new quantity/price.")
                 request.session[current_transaction_items_session_key] = current_items
                 return redirect('stock:sales')
 
@@ -347,14 +354,12 @@ def sales_processing_view(request):
                             SalesTransactionItem.objects.create(
                                 transaction=sales_transaction_header,
                                 product_detail_snapshot=pd_batch,
-                                quantity_sold_decimal=quantity_to_sell_for_item,
+                                quantity_sold_decimal=Decimal(item_data['quantity_decimal']),
                                 selling_price_per_item=Decimal(item_data['selling_price_per_item']),
+                                discount_percentage=Decimal(item_data.get('discount_percentage', '0.00')), # <-- Get from session
                                 cost_price_per_item_at_sale=Decimal(item_data['cost_price_per_item']),
-                                # Snapshot fields like expiry_date_at_sale, items_per_master_unit_at_sale
-                                # are now set in SalesTransactionItem's save method if product_detail_snapshot is provided
-                                expiry_date_at_sale=pd_batch.expirey_date, # Explicitly set here too
-                                items_per_master_unit_at_sale=pd_batch.items_per_master_unit # Explicitly set
-                                # returned_quantity_decimal defaults to 0
+                                expiry_date_at_sale=pd_batch.expirey_date,
+                                items_per_master_unit_at_sale=pd_batch.items_per_master_unit
                             )
                         
                         # After all items are saved, the grand_total_revenue is updated.
@@ -417,6 +422,11 @@ def sales_processing_view(request):
         'current_transaction_subtotal': current_transaction_subtotal,
     }
     return render(request, 'stock/sales_multiem.html', context) # New template name
+
+
+
+
+
 
 # AJAX endpoint to get details for a selected product_detail_batch
 # This is used by JavaScript to auto-fill parts of the SaleForm
@@ -521,7 +531,7 @@ def export_sales_to_excel(request):
     columns = [
         "Tx ID", "Date", "Time", "Customer", "Payment", "Status",
         "Total Revenue", "Total Profit", "Notes",  # Transaction-level info
-        "Product Name","Price Per Unit" ,"Quantity Sold", "Returned" ,"Unit", # Item-level info
+        "Product Name","Price Per Unit" ,"Quantity Sold", "Returned","Discount" ,"Unit", # Item-level info
     ]
     ws.append(columns)
 
@@ -552,6 +562,7 @@ def export_sales_to_excel(request):
                 f'{item.product_detail_snapshot.price_per_item}',
                 f'{item.quantity_sold_decimal}',
                 f'{item.returned_quantity_decimal}',
+                f'{tx.total_discount_amount}',
                 f'{item.product_detail_snapshot.quantity_in_packing} {item.product_detail_snapshot.unit_of_measure}',
             ]
             ws.append(row)

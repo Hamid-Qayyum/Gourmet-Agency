@@ -4,6 +4,13 @@ from stock.models import ProductDetail, Shop, Vehicle # Import from stock app
 from decimal import Decimal
 
 class ClaimForm(forms.ModelForm):
+      # as it might be pre-set or not applicable for store claims.
+    retrieval_vehicle = forms.ModelChoiceField(
+        queryset=Vehicle.objects.none(),
+        required=False, # It's not always required from the user's perspective
+        label="Retrieval Vehicle (if any)",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
+    )
     class Meta:
         model = Claim
         fields = [
@@ -24,7 +31,9 @@ class ClaimForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None) # Get user passed from the view
+        user = kwargs.pop('user', None)
+        preselected_vehicle = kwargs.pop('vehicle_instance', None) 
+        print(preselected_vehicle)
         super().__init__(*args, **kwargs)
         if user:
             # Populate dropdowns with user-specific (or all active) items
@@ -40,6 +49,9 @@ class ClaimForm(forms.ModelForm):
         self.fields['product_detail'].empty_label = "--- Select Product Batch to Claim ---"
         self.fields['claimed_from_shop'].empty_label = "--- Select Shop (Optional) ---"
         self.fields['retrieval_vehicle'].empty_label = "--- Select Vehicle (Optional, Store Claim if blank) ---"
+
+        if preselected_vehicle:
+            self.fields['retrieval_vehicle'].initial = preselected_vehicle
 
     def clean_quantity_claimed_decimal(self):
         claimed_qty = self.cleaned_data.get('quantity_claimed_decimal')

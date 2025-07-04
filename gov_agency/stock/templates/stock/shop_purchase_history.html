@@ -26,7 +26,9 @@
                     <tr>
                         <th>Tx ID</th>
                         <th>Date/Time</th>
-                        <th>Products Sold (Summary)</th>
+                        <th>Products Sold</th>
+                        <th>Returned</th>
+                        <th>Discount</th>
                         <th class="text-right">Total Revenue</th>
                         <th class="text-right">Total Profit</th>
                         <th>Payment</th>
@@ -50,6 +52,21 @@
                             (+{{ tx.items.all.count|add:"-2" }} more)
                             {% endif %}
                         </td>
+
+                         {# Returned Items Cell #}
+                        <td class="text-xs">
+                            {% with returned_items=tx.items.all %}
+                                {% if returned_items %}
+                                    <a href="javascript:void(0);" onclick="openReturnedItemsModal('{{ tx.pk }}')" class="link link-accent hover:underline">
+                                        View
+                                    </a>
+                                {% else %}
+                                    <span class="italic text-base-content/60">None</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+
+                        <td class="text-info font-semibold">Rs {{tx.total_discount_amount}} </td>
                         <td class="text-right font-semibold">Rs {{ tx.grand_total_revenue|floatformat:2 }}</td>
                         <td class="text-right font-bold {% if tx.calculated_grand_profit > 0 %}text-success{% else %}text-error{% endif %}">
                             Rs {{ tx.calculated_grand_profit|floatformat:2 }}
@@ -68,7 +85,7 @@
                         {% else %}
                         <td><span class="text-xs text-base-content/70">N/A</span></td>
                         {% endif %}
-                        <td><span class="badge badge-sm {% if tx.status == 'COMPLETED' %}badge-success{% elif tx.status == 'PENDING_DELIVERY' %}badge-warning{% else %}badge-ghost{% endif %}">{{ tx.get_status_display }}</span></td>
+                        <td><span class="badge badge-sm {% if tx.status == 'COMPLETED' %}badge-success{% elif tx.status == 'PENDING_DELIVERY' %}badge-warning{% else %}badge-accent{% endif %}">{{ tx.get_status_display }}</span></td>
                         <td>
                             <a href="{% url 'stock:sale_receipt' sale_pk=tx.pk %}" class="btn btn-xs btn-outline btn-accent" target="_blank">Receipt</a>
                         </td>
@@ -99,7 +116,7 @@
                     {% for item in tx.items.all %}
                         <div>
                             <strong>{{ item.product_detail_snapshot.product_base.name }}</strong>
-                            - {{ item.quantity_sold_decimal }} {{ item.product_detail_snapshot.unit_of_measure }}
+                            - {{ item.quantity_sold_decimal }}
                         </div>
                     {% endfor %}
                 </div>
@@ -108,6 +125,30 @@
     {% else %}
         <p class="text-center text-base-content/70 py-8">No sales recorded for {{ shop.name }} by you yet.</p>
     {% endif %}
+ 
+ 
+       <!-- Returned Items Modal -->
+    <dialog id="returnedItemsModal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <h3 class="font-bold text-lg mb-4">Returned Items</h3>
+            <div id="returnedItemsModalContent" class="space-y-2 text-sm"></div>
+            <div class="modal-action"><form method="dialog"><button class="btn btn-sm">Close</button></form></div>
+        </div>
+    </dialog>
+
+    <!-- Hidden data container for Returned Items (This can remain as is) -->
+    {% for tx in shop_transactions %}
+        <div id="tx-{{ tx.pk }}-returned-items" class="hidden">
+            {% for item in tx.items.all %}
+                {% if item.returned_quantity_decimal > 0 %}
+                    <div>
+                        <strong>{{ item.product_detail_snapshot.product_base.name }}</strong>
+                        - Returned Qty: <strong class="text-error">{{ item.returned_quantity_decimal }}</strong>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endfor %}
 
 
 
@@ -145,6 +186,23 @@
     content.innerHTML = container ? container.innerHTML : "<p>No product info found.</p>";
     document.getElementById("productModal").showModal();
 }
+
+// Function for the Returned Items Modal
+ function openReturnedItemsModal(txId) {
+        const container = document.getElementById(`tx-${txId}-returned-items`);
+        const content = document.getElementById("returnedItemsModalContent");
+        
+        // Check if the container has any actual content. If it's empty, show a message.
+        if (container && container.innerHTML.trim()) {
+            content.innerHTML = container.innerHTML;
+        } else {
+            console.log(container)
+            content.innerHTML = "<p>No items were returned for this transaction.</p>";
+        }
+        
+        document.getElementById("returnedItemsModal").showModal();
+    }
+
 document.addEventListener('DOMContentLoaded', function () {
 
     const noteModalCheckbox = document.getElementById('note_modal');

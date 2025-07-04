@@ -58,6 +58,7 @@
                         <th>Customer</th>
                         <th>Products Sold</th>
                         <th>Returned</th>
+                        <th>Discount</th>
                         <th class="">Total Revenue</th>
                         <th class="">Profit</th>
                         <th>Payment</th>
@@ -100,6 +101,11 @@
                                     <span class="italic text-base-content/60">None</span>
                                 {% endif %}
                             {% endwith %}
+                        </td>
+
+                         <!-- NEW: Discount Column -->
+                         <td class="whitespace-nowrap text-center">  
+                            <span class="text-info font-semibold">Rs {{ tx.total_discount_amount|floatformat:2|intcomma }}</span>  
                         </td>
 
                         <td class=" font-semibold whitespace-nowrap">Rs {{ tx.grand_total_revenue|floatformat:2|intcomma }}</td>
@@ -201,7 +207,6 @@
                         <div>
                             <strong>{{ item.product_detail_snapshot.product_base.name }}</strong>
                             - Returned Qty: <strong class="text-error">{{ item.returned_quantity_decimal }}</strong>
-                            {{ item.product_detail_snapshot.unit_of_measure }}
                         </div>
                     {% endif %}
                 {% endfor %}

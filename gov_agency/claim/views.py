@@ -19,6 +19,8 @@ def claims_hub_view(request):
     }
     return render(request, 'claim/claims_hub.html', context)
 
+
+
 # 2. The Group Details View (for a specific vehicle or the store)
 @login_required
 def claim_group_details_view(request, vehicle_pk=None):

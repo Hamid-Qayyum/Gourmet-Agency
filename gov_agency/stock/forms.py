@@ -3,7 +3,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from .models import AddProduct,ProductDetail,Sale, Vehicle, Shop,SalesTransaction,SalesTransactionItem
 from decimal import Decimal
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.forms import modelformset_factory
 from datetime import date, timedelta
 
@@ -201,7 +201,7 @@ class AddItemToSaleForm(forms.Form):
 
     # User inputs for this item
     quantity_to_add = forms.DecimalField(
-        label="Quantity to Add (e.g., 1.1 for 1 Carton + 1 Item)",
+        label="Quantity to Add (e.g., 1.01 for 1 Carton + 1 Item)",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         initial=Decimal('0.00'),
@@ -212,6 +212,15 @@ class AddItemToSaleForm(forms.Form):
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_selling_price', 'step': '0.01'})
+    )
+
+    discount_percentage = forms.DecimalField(
+        label="Discount (%)",
+        max_digits=5, decimal_places=2,
+        required=False, # It can be empty, defaulting to 0 in the view
+        initial=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))],
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_discount', 'step': '0.1', 'placeholder': 'e.g., 5 for 5%'})
     )
 
     def __init__(self, *args, **kwargs):

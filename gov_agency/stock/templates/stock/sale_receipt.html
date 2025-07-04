@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Receipt - Transaction #{{ transaction.pk }}</title>
-    {% load math_operations %}
     <style>
         body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; background-color: #fff; color: #000; font-size: 12pt; }
         .receipt-container { width: 80mm; margin: 20px auto; padding: 15px; border: 1px solid #ccc; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
@@ -19,7 +18,7 @@
         .item-table th.price, .item-table td.price { text-align: right; width: 25%; }
         .item-table th.amount, .item-table td.amount { text-align: right; width: 30%; }
         .item-table .item-name { width: 30%; }
-        .item-table .description { font-size: 0.85em; color: #555; display: block; }
+        .item-table .description { font-size: 0.85em; color: #555; }
         .totals-section { margin-top: 10px; font-size: 0.95em; }
         .totals-section div { display: flex; justify-content: space-between; padding: 2px 0; }
         .totals-section .grand-total { font-weight: bold; font-size: 1.1em; border-top: 1px solid #000; margin-top: 5px; padding-top: 5px; }
@@ -51,9 +50,6 @@
                 <strong>Customer:</strong> 
                 {{ transaction.customer_shop.name|default:transaction.customer_name_manual|default:"Walk-in Customer" }}
             </div>
-            {% if transaction.needs_vehicle and transaction.assigned_vehicle %}
-                <div><strong>Delivery Vehicle:</strong> {{ transaction.assigned_vehicle.vehicle_number }}</div>
-            {% endif %}
         </div>
 
         <hr class="dashed">
@@ -62,67 +58,53 @@
             <thead>
                 <tr>
                     <th class="item-name">Item</th>
-                    <th class="qty">Qty Sold</th>
-                    <th class="price">Price/Item</th>
-                    <th class="amount">Amount</th>
+                    <th class="qty">Qty</th>
+                    <th class="price">Price</th>
+                    <th class="amount">Total</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in transaction.items.all %}
                 <tr>
                     <td class="item-name">
-                        {{ item.product_detail_snapshot.product_base.name }}
+                        {{ item.product_detail_snapshot.product_base.name }} 
+                        {{item.product_detail_snapshot.quantity_in_packing|floatformat:"-1g"}}
+                        {{item.product_detail_snapshot.unit_of_measure}}
                         <span class="description">
-                            {{ item.product_detail_snapshot.packing_type }}
-                            ({{ item.product_detail_snapshot.quantity_in_packing|floatformat:"-2g" }} {{ item.product_detail_snapshot.unit_of_measure }})
+                            {% if item.discount_percentage > 0 %}
+                                ({{ item.discount_percentage|floatformat:"-2g" }}% off)
+                            {% endif %}
                             {% if item.returned_quantity_decimal > 0 %}
-                                <br><strong style="color: red;">Returned: {{ item.returned_quantity_decimal }}</strong>
+                                <br><strong style="color: red;">Returned:-{{ item.returned_quantity_decimal }}</strong>
                             {% endif %}
                         </span>
                     </td>
-                    <td class="qty">
-                        {{ item.quantity_sold_decimal }}
-                        {% if item.returned_quantity_decimal > 0 %}
-                            <br><span style="color:red; font-size:0.8em;">(-{{ item.returned_quantity_decimal }})</span>
-                            <hr style="border-top: 1px solid #ccc; margin: 1px 0;">
-                            {{ item.quantity_sold_decimal }} <!-- Net Qty -->
-                        {% endif %}
-                    </td>
+                    <td class="qty">{{item.quantity_sold_decimal}} </td>
                     <td class="price">Rs {{ item.selling_price_per_item|floatformat:2 }}</td>
-                    <td class="amount">
-                        Rs {{ item.total_item_dispatched_revenue|floatformat:2 }}
-                        {% if item.returned_quantity_decimal > 0 %}
-                             <br><span style="color:red; font-size:0.8em;">(- {{ item.returned_individual_items_count|multiply:item.selling_price_per_item|floatformat:2 }})</span>
-                             <hr style="border-top: 1px solid #ccc; margin: 1px 0;">
-                             Rs {{ item.total_item_final_revenue|floatformat:2 }} <!-- Net Amount -->
-                        {% endif %}
-                    </td>
+                    <td class="amount">Rs {{ item.total_item_final_revenue|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         
         <div class="totals-section">
+            {% with subtotal=transaction.grand_total_revenue|add:transaction.total_discount_amount %}
             <div>
-                <span>Subtotal (Dispatched):</span>
-                <span>Rs {{ transaction.grand_total_revenue|floatformat:2 }}</span> {# This should be sum of item.total_item_dispatched_revenue #}
+                <span>Subtotal:</span>
+                <span>Rs {{ subtotal|floatformat:2 }}</span>
             </div>
-
-            {% comment %}
-            For more detailed breakdown if returns happened:
-            {% if transaction.items.all|sum_returned_value > 0 %} 
-                # Requires custom filter or property on transaction
-                <div>
-                    <span>Total Returns Value:</span>
-                    <span style="color:red;">- Rs {{ ... }}</span>
-                </div>
+            {% if transaction.total_discount_amount > 0 %}
+            <div>
+                <span>Discount:</span>
+                <span style="color: green;">- Rs {{ transaction.total_discount_amount|floatformat:2 }}</span>
+            </div>
             {% endif %}
-            {% endcomment %}
+            {% endwith %}
             
             <hr class="dashed" style="margin: 5px 0;">
             <div class="grand-total">
                 <span>GRAND TOTAL:</span>
-                <span>Rs {{ transaction.calculated_grand_profit|add:transaction.grand_total_cost|floatformat:2 }}</span> {# Recalculating final revenue from profit and cost #}
+                <span>Rs {{ transaction.grand_total_revenue|floatformat:2 }}</span>
             </div>
              <div>
                 <span>Payment Type:</span>
