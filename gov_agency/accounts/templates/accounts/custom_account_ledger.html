@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load account_filters %} {# Assuming you have this for sum_debit/sum_credit #}
+
+{% block title %}Ledger: {{ account.name }}{% endblock %}
+{% block page_title %}Custom Account Ledger: {{ account.name }}{% endblock %}
+
+{% block extra_head %}{{block.super}}
+<style>
+    .table th, .table td { font-size: 0.875rem; padding: 0.5rem; vertical-align: middle; }
+    .debit-col { text-align: right; color: hsl(var(--er)); }
+    .credit-col { text-align: right; color: hsl(var(--su)); }
+    .balance-col { text-align: right; font-weight: bold; }
+    .modal { z-index: 1050; }
+    .form-grid-modal { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
+        <div>
+            <h1 class="text-2xl font-bold">Financial Ledger: {{ account.name }}</h1>
+            <p class="text-sm text-base-content/70">{{ account.phone_number|default:"No phone number" }}</p>
+        </div>
+        <a href="{% url 'accounts:custom_account_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0">← Back to Custom Accounts Hub</a>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats shadow mb-6 w-full">
+        <div class="stat">
+            <div class="stat-title">Total Debits</div>
+            <div class="stat-value text-error">Rs {{ account.transactions.all|sum_debit|floatformat:2|intcomma }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Total Credits</div>
+            <div class="stat-value text-success">Rs {{ account.transactions.all|sum_credit|floatformat:2|intcomma }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-title">Current Balance</div>
+            <div class="stat-value text-primary">Rs {{ account.current_balance|floatformat:2|intcomma }}</div>
+            <div class="stat-desc {% if account.current_balance > 0 %}text-error{% elif account.current_balance < 0 %}text-success{% endif %}">
+                {% if account.current_balance > 0 %}Owed to you{% elif account.current_balance < 0 %}You owe{% else %}Settled{% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Action Button -->
+    <div class="mb-6">
+        <label for="add_entry_modal_checkbox" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Add Debit/Credit Entry
+        </label>
+    </div>
+
+    <!-- Ledger Table -->
+    <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
+        <table class="table table-sm w-full">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Notes</th>
+                    <th class="debit-col">Debit (+)</th>
+                    <th class="credit-col">Credit (-)</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in ledger_entries %}
+                <tr>
+                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
+                    <td class="text-xs">{{ entry.notes|default:""|truncatechars:50 }}</td>
+                    <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2 }}{% endif %}</td>
+                    <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2 }}{% endif %}</td>
+                    <td class="text-center space-x-1">
+                        <button type="button" class="btn btn-xs btn-outline btn-info open-edit-tx-modal-btn" data-tx-pk="{{ entry.pk }}">Edit</button>
+                        <button type="button" class="btn btn-xs btn-outline btn-error open-delete-tx-modal-btn" data-tx-pk="{{ entry.pk }}" data-tx-info="Entry of Rs {{entry.debit_amount|add:entry.credit_amount}}">Delete</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-6">No transactions recorded for this account yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- MODALS for Add, Edit, and Delete -->
+    <!-- ADD Entry Modal -->
+    <input type="checkbox" id="add_entry_modal_checkbox" class="modal-toggle" {% if form_had_errors %}checked{% endif %} />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog">
+        <div class="modal-box">
+            <form method="post" action="{% url 'accounts:custom_account_ledger' account_pk=account.pk %}">
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4">Add Ledger Entry for {{ account.name }}</h3>
+                <div class="space-y-4">
+                    {% for field in add_form %}<div class="form-control w-full"><label class="label" for="{{ field.id_for_label }}"><span class="label-text">{{ field.label }}</span></label>{{ field }}{% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}</div>{% endfor %}
+                </div>
+                <div class="modal-action mt-6"><label for="add_entry_modal_checkbox" class="btn btn-ghost">Cancel</label><button type="submit" class="btn btn-primary">Save Entry</button></div>
+            </form>
+        </div><label class="modal-backdrop" for="add_entry_modal_checkbox">Close</label>
+    </div>
+
+    <!-- EDIT Entry Modal -->
+    <input type="checkbox" id="edit_tx_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog">
+        <div class="modal-box"><form id="editTxForm" method="post" action=""><!_ Action set by JS _>{% csrf_token %}<h3 class="font-bold text-lg mb-4" id="editTxModalTitle">Edit Entry</h3><div class="space-y-4">{% for field in edit_form %}<div class="form-control w-full"><label class="label" for="update_{{ field.name }}"><span class="label-text">{{ field.label }}</span></label>{% with WIDGET_TYPE=field.field.widget.input_type %}{% if WIDGET_TYPE == 'textarea' %}<textarea name="{{field.name}}" id="update_{{field.name}}" class="{{field.field.widget.attrs.class}}"></textarea>{% else %}<input type="{{WIDGET_TYPE}}" name="{{field.name}}" id="update_{{field.name}}" class="{{field.field.widget.attrs.class}}" step="0.01">{% endif %}{% endwith %}</div>{% endfor %}</div><div class="modal-action mt-6"><label for="edit_tx_modal_checkbox" class="btn btn-ghost">Cancel</label><button type="submit" class="btn btn-info">Save Changes</button></div></form></div><label class="modal-backdrop" for="edit_tx_modal_checkbox">Close</label>
+    </div>
+
+    <!-- DELETE Entry Modal -->
+    <input type="checkbox" id="delete_tx_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle" role="dialog">
+        <div class="modal-box"><h3 class="font-bold text-lg text-error">Confirm Deletion</h3><p class="py-4" id="deleteTxConfirmMessageText">Are you sure?</p><div class="modal-action"><form id="deleteTxForm" method="POST" action=""><!_ Action set by JS _>{% csrf_token %}<button type="submit" class="btn btn-error">Yes, Delete</button></form><label for="delete_tx_modal_checkbox" class="btn btn-ghost">Cancel</label></div></div><label class="modal-backdrop" for="delete_tx_modal_checkbox">Close</label>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currentUrl = window.location.pathname;
+
+    // --- Edit Transaction Modal ---
+    const editTxModalCheckbox = document.getElementById('edit_tx_modal_checkbox');
+    const editTxForm = document.getElementById('editTxForm');
+    const editTxModalTitle = document.getElementById('editTxModalTitle');
+    document.querySelectorAll('.open-edit-tx-modal-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const txPk = this.dataset.txPk;
+            if(!txPk) return;
+
+            const actionUrl = `{% url 'accounts:update_custom_transaction' pk=0 %}`.replace('0', txPk);
+            editTxForm.action = `${actionUrl}?next=${encodeURIComponent(currentUrl)}`; // Use encodeURIComponent for safety
+            
+            editTxModalTitle.textContent = "Loading Entry...";
+            editTxModalCheckbox.checked = true;
+
+            const ajaxUrl = `{% url 'accounts:ajax_get_custom_transaction_data' pk=0 %}`.replace('0', txPk);
+            
+            fetch(ajaxUrl)
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        const data = result.data;
+                        editTxModalTitle.textContent = `Edit Entry #${data.pk}`;
+                        
+                        // ================= CORRECTED SECTION =================
+                        // Ensure your form has fields with these names.
+                        // The IDs will be 'update_FIELDNAME'.
+                        const formFields = {
+                            'transaction_date': data.transaction_date,
+                            'entity_name': data.entity_name, // <-- THIS WAS LIKELY THE MISSING PIECE
+                            'debit_amount': data.debit_amount,
+                            'credit_amount': data.credit_amount,
+                            'notes': data.notes
+                        };
+
+                        // Loop through the fields to populate them safely.
+                        for (const fieldName in formFields) {
+                            const input = editTxForm.querySelector(`#update_${fieldName}`);
+                            if (input) {
+                                input.value = formFields[fieldName];
+                            } else {
+                                console.warn(`Could not find input for field: #update_${fieldName}`);
+                            }
+                        }
+                        // ================= END CORRECTED SECTION ================
+
+                    } else {
+                        alert('Error: Could not load data. ' + (result.error || ''));
+                        editTxModalCheckbox.checked = false;
+                    }
+                }).catch(err => {
+                    console.error('Fetch Error:', err);
+                    alert('A network error occurred while loading transaction data.');
+                    editTxModalCheckbox.checked = false;
+                });
+        });
+    });
+    if(editTxModalCheckbox) {
+        editTxModalCheckbox.addEventListener('change', function(){
+            if(!this.checked) editTxForm.reset();
+        });
+    }
+
+
+    // --- Delete Transaction Modal ---
+    const deleteTxModalCheckbox = document.getElementById('delete_tx_modal_checkbox');
+    const deleteTxConfirmMsg = document.getElementById('deleteTxConfirmMessageText');
+    const deleteTxForm = document.getElementById('deleteTxForm');
+    document.querySelectorAll('.open-delete-tx-modal-btn').forEach(button => {
+        button.addEventListener('click', function(){
+            const txPk = this.dataset.txPk;
+            const txInfo = this.dataset.txInfo;
+            if (!txPk) return;
+            
+            deleteTxConfirmMsg.innerHTML = `Are you sure you want to delete this entry: <strong class="text-error">${txInfo}</strong>? This action cannot be undone.`;
+            
+            // The pk in the URL name is `pk`, so no need to change it
+            const actionUrl = `{% url 'accounts:delete_custom_transaction' pk=0 %}`.replace('0', txPk);
+            deleteTxForm.action = `${actionUrl}?next=${encodeURIComponent(currentUrl)}`; // Use encodeURIComponent
+            
+            if (deleteTxModalCheckbox) deleteTxModalCheckbox.checked = true;
+        });
+    });
+    if(deleteTxModalCheckbox) {
+        deleteTxModalCheckbox.addEventListener('change', function(){
+            if(!this.checked) deleteTxForm.action = '';
+        });
+    }
+});
+</script>
+{% endblock %}

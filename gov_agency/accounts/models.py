@@ -3,6 +3,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from decimal import Decimal
 from django.core.validators import MinValueValidator
+from django.db.models import Sum  # <-- ADD THIS LINE
+
 # Create your models here.
 
 
@@ -80,3 +82,75 @@ class ShopFinancialTransaction(models.Model):
         ordering = ['-transaction_date', '-pk'] # Order by most recent first
         verbose_name = "Shop Financial Transaction"
         verbose_name_plural = "Shop Financial Transactions"
+
+
+
+
+
+class CustomAccount(models.Model):
+    """Represents an independent customer or entity for financial tracking."""
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="custom_accounts"
+    )
+    name = models.CharField(
+        max_length=200,
+        help_text="A unique name for this person or entity."
+    )
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def current_balance(self):
+        """Calculates the current balance from its related transactions."""
+        totals = self.transactions.aggregate(
+            total_debit=Sum('debit_amount'),
+            total_credit=Sum('credit_amount')
+        )
+        total_debit = totals.get('total_debit') or Decimal('0.00')
+        total_credit = totals.get('total_credit') or Decimal('0.00')
+        return total_debit - total_credit
+
+    class Meta:
+        ordering = ['name']
+        # A user cannot have two custom accounts with the same name
+        unique_together = [['user', 'name']]
+        verbose_name = "Custom Account"
+        verbose_name_plural = "Custom Accounts"
+
+
+class CustomAccountTransaction(models.Model):
+    """Represents a single debit or credit ledger entry for a CustomAccount."""
+    account = models.ForeignKey(
+        CustomAccount,
+        on_delete=models.CASCADE,
+        related_name="transactions" # e.g., my_account.transactions.all()
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    debit_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Amount owed TO you by this entity (increases their balance)."
+    )
+    credit_amount = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal('0.00'),
+        help_text="Amount paid BY you or received FROM this entity (decreases their balance)."
+    )
+    notes = models.CharField(max_length=255, blank=True, null=True)
+    transaction_date = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Transaction for {self.account.name} on {self.transaction_date.strftime('%Y-%m-%d')}"
+
+    class Meta:
+        ordering = ['-transaction_date', '-pk']
+        verbose_name = "Custom Account Transaction"
+        verbose_name_plural = "Custom Account Transactions"

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Custom Accounts{% endblock %}
+{% block page_title %}Custom Ledger Accounts{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold">Custom Ledger Accounts</h1>
+        <label for="add_account_modal_checkbox" class="btn btn-primary">Create New Account</label>
+    </div>
+
+    <!-- Grid of Custom Account Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {% for account in accounts %}
+        <div class="card bg-base-100 shadow-md hover:shadow-lg transition">
+            <a href="{% url 'accounts:custom_account_ledger' account_pk=account.pk %}" class="block p-4 flex-grow">
+                <div class="card-body p-0">
+                    <h2 class="card-title">{{ account.name }}</h2>
+                    <p class="text-sm text-base-content/70">{{ account.notes|truncatewords:10|default:"No description." }}</p>
+                    <div class="stat p-0 mt-2">
+                        <div class="stat-title text-xs">Current Balance</div>
+                        <div class="stat-value text-lg {% if account.current_balance > 0 %}text-error{% elif account.current_balance < 0 %}text-success{% endif %}">
+                            Rs {{ account.current_balance|floatformat:2|intcomma }}
+                        </div>
+                    </div>
+                </div>
+            </a>
+            <!-- NEW: Card Actions for Edit/Delete Buttons -->
+            <div class="card-actions justify-end p-4 pt-0">
+                <label for="edit_account_modal_checkbox"
+                       class="btn btn-xs btn-outline btn-info open-edit-account-btn"
+                       data-account-pk="{{ account.pk }}"
+                       data-account-name="{{ account.name }}"
+                       data-account-notes="{{ account.notes|default_if_none:'' }}"
+                        data-account-phone="{{ account.phone_number|default_if_none:'' }}">Edit</label>
+                <label for="delete_account_modal_checkbox"
+                       class="btn btn-xs btn-outline btn-error open-delete-account-btn"
+                       data-account-pk="{{ account.pk }}"
+                       data-account-name="{{ account.name }}">Delete</label>
+            </div>
+        </div>
+        {% empty %}
+        <p class="col-span-full text-center py-8">No custom accounts created yet.</p>
+        {% endfor %}
+    </div>
+
+    <!-- MODALS SECTION -->
+
+    <!-- ADD Custom Account MODAL (Corrected action) -->
+    <input type="checkbox" id="add_account_modal_checkbox" class="modal-toggle" {% if form_had_errors %}checked{% endif %} />
+    <div class="modal modal-bottom sm:modal-middle">
+        <div class="modal-box">
+            <form method="post" action="{% url 'accounts:custom_account_hub' %}">
+                {% csrf_token %}
+                <h3 class="font-bold text-lg mb-4">Create New Ledger Account</h3>
+                <div class="space-y-4">{{ add_form.as_p }}</div>
+                <div class="modal-action mt-6">
+                    <label for="add_account_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-primary">Create Account</button>
+                </div>
+            </form>
+        </div><label class="modal-backdrop" for="add_account_modal_checkbox">Close</label>
+    </div>
+
+   <input type="checkbox" id="edit_account_modal_checkbox" class="modal-toggle" />
+<div class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box">
+        <form id="editAccountForm" method="post" action=""> <!-- Action set by JS -->
+            {% csrf_token %}
+            <h3 class="font-bold text-lg mb-4">Edit Account</h3>
+            <div class="space-y-4">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Account Name</span></label>
+                    <input type="text" id="edit_account_name" name="name" class="input input-bordered w-full" required>
+                </div>
+
+                <!-- ADD THIS ENTIRE DIV BLOCK for the phone number -->
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Phone Number (Optional)</span></label>
+                    <input type="tel" id="edit_account_phone" name="phone_number" class="input input-bordered w-full">
+                </div>
+
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Notes (Optional)</span></label>
+                    <textarea id="edit_account_notes" name="notes" class="textarea textarea-bordered w-full"></textarea>
+                </div>
+            </div>
+            <div class="modal-action mt-6">
+                <label for="edit_account_modal_checkbox" class="btn btn-ghost">Cancel</label>
+                <button type="submit" class="btn btn-info">Save Changes</button>
+            </div>
+        </form>
+    </div><label class="modal-backdrop" for="edit_account_modal_checkbox">Close</label>
+</div>
+
+    <!-- NEW: DELETE Confirmation MODAL -->
+    <input type="checkbox" id="delete_account_modal_checkbox" class="modal-toggle" />
+    <div class="modal modal-bottom sm:modal-middle">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-error">Confirm Deletion</h3>
+            <p class="py-4" id="deleteAccountConfirmMessage">Are you sure?</p>
+            <div class="modal-action">
+                <form id="deleteAccountForm" method="post" action=""> <!-- Action set by JS -->
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-error">Yes, Delete Account</button>
+                </form>
+                <label for="delete_account_modal_checkbox" class="btn btn-ghost">Cancel</label>
+            </div>
+        </div><label class="modal-backdrop" for="delete_account_modal_checkbox">Close</label>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+   // --- Edit Account Modal Logic ---
+    const editModalCheckbox = document.getElementById('edit_account_modal_checkbox');
+    const editForm = document.getElementById('editAccountForm');
+    const editNameInput = document.getElementById('edit_account_name');
+    const editPhoneInput = document.getElementById('edit_account_phone'); // <-- GET THE NEW INPUT
+    const editNotesInput = document.getElementById('edit_account_notes');
+    
+    document.querySelectorAll('.open-edit-account-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const pk = this.dataset.accountPk;
+            const name = this.dataset.accountName;
+            const notes = this.dataset.accountNotes;
+            const phone = this.dataset.accountPhone; // <-- GET THE NEW DATA ATTRIBUTE
+            
+            // Populate form with current data
+            editNameInput.value = name;
+            editPhoneInput.value = phone; // <-- POPULATE THE PHONE INPUT
+            editNotesInput.value = notes;
+            
+            // Set the form's action URL dynamically
+            const actionUrl = `{% url 'accounts:update_custom_account' 0 %}`.replace('0', pk);
+            editForm.action = actionUrl;
+        });
+    });
+
+    // --- Delete Account Modal Logic ---
+    const deleteModalCheckbox = document.getElementById('delete_account_modal_checkbox');
+    const deleteForm = document.getElementById('deleteAccountForm');
+    const deleteMessage = document.getElementById('deleteAccountConfirmMessage');
+
+    document.querySelectorAll('.open-delete-account-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const pk = this.dataset.accountPk;
+            const name = this.dataset.accountName;
+
+            // Set confirmation message
+            deleteMessage.innerHTML = `Are you sure you want to delete the account: <strong class="text-error">${name}</strong>? This will also delete all of its associated transactions and cannot be undone.`;
+            
+            // Set the form's action URL dynamically
+            const actionUrl = `{% url 'accounts:delete_custom_account' 0 %}`.replace('0', pk);
+            deleteForm.action = actionUrl;
+        });
+    });
+});
+</script>
+{% endblock %}
