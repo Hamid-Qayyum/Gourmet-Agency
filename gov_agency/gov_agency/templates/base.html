@@ -37,49 +37,56 @@
                 </li>
 
             <li>
-                    <a href="{% url 'stock:sales' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'stock:sales' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'sales' %}active{% endif %}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" /></svg>
                         sales
                     </a>
                 </li> 
                 <li>
-                    <a href="{% url 'stock:all_transactions_list' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'stock:all_transactions_list' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'all_transactions_list' %}active{% endif %}">
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
                         </svg>
                         All Sales
                     </a>
                 </li> 
                 <li>
-                    <a href="{% url 'stock:list_shops_for_sales' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'stock:list_shops_for_sales' %}" class="hover:bg-base-300  {% if request.resolver_match.url_name == 'list_shops_for_sales' %}active{% endif %}">
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg>
                         Sales by Shop
                     </a>
                 </li> 
                 <li>
-                    <a href="{% url 'stock:pending_deliveries' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'stock:pending_deliveries' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'pending_deliveries' %}active{% endif %}">
                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" /></svg>
                         Pending Deliveries
                     </a>
                 </li> 
                 <li>
-                    <a href="{% url 'stock:sales_report' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'stock:sales_report' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'sales_report' %}active{% endif %} ">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" /></svg>
                         Sales Report
                     </a>
                 </li> 
                 <li>
-                    <a href="{% url 'accounts:transactions_hub' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'accounts:transactions_hub' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'transactions_hub' %}active{% endif %} ">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" /></svg>
                         Transactions & Ledgers
                     </a>
                 </li> 
 
                 <li>
-                    <a href="{% url 'claim:claims_hub' %}" class="hover:bg-base-300 ">
+                    <a href="{% url 'claim:claims_hub' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'claims_hub' %}active{% endif %}">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
                         Stock Claims
                     </a>
                 </li> 
+
+                <li>
+                    <a href="{% url 'expense:manage_expenses' %}" class="{% if request.resolver_match.url_name == 'manage_expenses' %}active{% endif %}">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6 9 12.75l4.286-4.286a11.948 11.948 0 0 1 4.306 6.43l.776 2.898m0 0 3.182-5.511m-3.182 5.51-5.511-3.181" /></svg>
+                        Expenses
+                    </a>
+                </li>
            
                  <details class="mt-4 group">
                 <summary class="cursor-pointer flex items-center gap-2 text-black hover:bg-gray-100 px-2 py-1 rounded-md">
