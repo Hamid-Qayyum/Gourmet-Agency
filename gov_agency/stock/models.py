@@ -255,7 +255,7 @@ class SalesTransactionItem(models.Model):
     # Which specific product batch was sold for this line item
     product_detail_snapshot = models.ForeignKey(
         'ProductDetail', 
-        on_delete=models.CASCADE, # Prevent deleting ProductDetail if it's part of a sold item.
+        on_delete=models.PROTECT, # Prevent deleting ProductDetail if it's part of a sold item.
                                   # You might need a way to "deactivate" product details instead.
         help_text="The specific product batch (product name, expiry, etc.) sold."
     )

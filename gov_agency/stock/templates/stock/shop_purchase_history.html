@@ -6,6 +6,16 @@
 <div class="p-4 md:p-6">
     {# ... (Shop details and summary stats using shop_total_revenue, shop_total_profit) ... #}
     <h1 class="text-2xl font-bold">Purchase History: {{ shop.name }}</h1>
+    {% comment %} searchbar {% endcomment %}
+    <div class="form-control w-full md:w-80 mt-4 mb-4">
+    <input
+    type="text"
+    id="historySearchInput"
+    placeholder="Search by date, product, etc..."
+    class="w-full py-2 pl-10 pr-4 text-gray-700 bg-white border rounded-full outline-none transition-all border-gray-300 focus:ring-2 focus:ring-primary"
+  />
+</div>
+
     <div class="stats shadow mb-6 bg-base-100">
         <div class="stat">
             <div class="stat-title">Total Revenue</div>
@@ -18,7 +28,6 @@
             </div>
         </div>
     </div>
-
     {% if shop_transactions %} {# Changed from shop_sales #}
         <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
             <table class="table table-sm w-full">
@@ -85,7 +94,7 @@
                         {% else %}
                         <td><span class="text-xs text-base-content/70">N/A</span></td>
                         {% endif %}
-                        <td><span class="badge badge-sm {% if tx.status == 'COMPLETED' %}badge-success{% elif tx.status == 'PENDING_DELIVERY' %}badge-warning{% else %}badge-accent{% endif %}">{{ tx.get_status_display }}</span></td>
+                        <td><span class="badge badge-sm {% if tx.status == 'COMPLETED' %}badge-success{% elif tx.status == 'PENDING_DELIVERY' %}badge-warning{% else %}badge-accent {% endif %}">{{ tx.get_status_display }}</span></td>
                         <td>
                             <a href="{% url 'stock:sale_receipt' sale_pk=tx.pk %}" class="btn btn-xs btn-outline btn-accent" target="_blank">Receipt</a>
                         </td>
@@ -180,7 +189,7 @@
 {% block extra_scripts %}
   {{ block.super }}
   <script>
-       function openProductModal(txId) {
+    function openProductModal(txId) {
     const container = document.getElementById(`tx-${txId}-items`);
     const content = document.getElementById("productModalContent");
     content.innerHTML = container ? container.innerHTML : "<p>No product info found.</p>";
@@ -204,6 +213,17 @@
     }
 
 document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById("historySearchInput");
+    const tableRows = document.querySelectorAll("table tbody tr");
+
+    searchInput.addEventListener("input", function () {
+        const searchTerm = this.value.toLowerCase();
+
+        tableRows.forEach((row) => {
+            const rowText = row.innerText.toLowerCase();
+            row.style.display = rowText.includes(searchTerm) ? "" : "none";
+        });
+    });
 
     const noteModalCheckbox = document.getElementById('note_modal');
     const noteTextarea = document.getElementById('note_text');

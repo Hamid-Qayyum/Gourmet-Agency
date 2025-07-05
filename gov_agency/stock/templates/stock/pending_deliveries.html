@@ -1,50 +1,148 @@
 {% extends "base.html" %}
+{% load static %}
+
 {% block title %}Pending Deliveries{% endblock %}
 {% block page_title %}Process Pending Deliveries{% endblock %}
 
+{% block extra_head %}{{ block.super }}
+<style>
+    /* Style for printing */
+    @media print {
+        body * {
+            visibility: hidden; /* Hide everything by default */
+        }
+        #print-section, #print-section * {
+            visibility: visible; /* Show only the print section */
+        }
+        #print-section {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+        }
+        .btn, .form-control {
+            display: none; /* Hide buttons and search bar in print view */
+        }
+        .table {
+            font-size: 10pt;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="p-4 md:p-6">
-    <h1 class="text-2xl font-bold mb-6">Sales Pending Delivery</h1>
-    {% if pending_transactions %}
-        <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
-            <table class="table table-sm w-full">
-                <thead>
-                    <tr>
-                        <th>Tx ID</th>
-                        <th>Date</th>
-                        <th>Customer</th>
-                        <th>Items</th>
-                        <th>Vehicle</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for tx in pending_transactions %} {# Changed from sale to tx #}
-                    <tr>
-                        <td>#{{ tx.pk }}</td>
-                        <td class="text-xs">{{ tx.transaction_time|date:"Y-m-d H:i" }}</td>
-                        <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A" }}</td>
-                        <td class="text-xs">
-                            {% for item in tx.items.all|slice:":2" %}
-                                {{ item.product_detail_snapshot.product_base.name }} ({{item.quantity_sold_decimal}})<br>
-                            {% endfor %}
-                            {% if tx.items.all.count > 2 %}...and more{% endif %}
-                        </td>
-                        <td>{{ tx.assigned_vehicle.vehicle_number|default:"N/A" }}</td>
-                        <td>
-                            {# The URL name for processing might need to change if it expected old Sale pk #}
-                            {# Assuming process_delivery_return view now takes SalesTransaction pk #}
-                            <a href="{% url 'stock:process_delivery_return' sale_pk=tx.pk %}" class="btn btn-xs btn-info">
-                                Process Delivery/Return
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        <h1 class="text-2xl font-bold">Sales Pending Delivery</h1>
+        
+        <div class="flex items-center gap-4 w-full sm:w-auto">
+            <!-- Real-time search bar -->
+            <div class="form-control w-full sm:w-64">
+                <input type="text" id="deliverySearchInput" placeholder="Search..." class="w-full rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent" />
+            </div>
+            
+            <!-- Print button -->
+            <button id="printPendingDeliveriesBtn"
+    class="inline-block w-auto text-center min-w-[100px] px-1 py-1 text-white transition-all bg-green-400 hover:bg-green-600  dark:bg-gray dark:text-gray-800 rounded-md  sm:w-auto hover:bg-gray-200 hover:text-white shadow-neutral-100 dark:shadow-neutral-400 hover:shadow-1xl hover:shadow-neutral-400 hover:-translate-y-px flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+        stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round"
+            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+    </svg>
+    Print List
+</button>
         </div>
+    </div>
+
+    {% if pending_transactions %}
+        <div id="print-section"> {# This wrapper is used for printing #}
+            <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
+                <table class="table table-sm w-full" id="pendingDeliveriesTable">
+                    <thead>
+                        <tr>
+                            <th>Tx ID</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Items</th>
+                            <th>Vehicle</th>
+                            <th class="actions-cell">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in pending_transactions %}
+                        <tr class="delivery-row">
+                            <td>#{{ tx.pk }}</td>
+                            <td class="text-xs">{{ tx.transaction_time|date:"Y-m-d H:i" }}</td>
+                            <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A" }}</td>
+                            <td class="text-xs">
+                                {% for item in tx.items.all|slice:":2" %}
+                                    {{ item.product_detail_snapshot.product_base.name }} ({{item.quantity_sold_decimal}}) 
+                                    {{item.product_detail_snapshot.quantity_in_packing}} {{item.product_detail_snapshot.unit_of_measure}}<br>
+                                {% endfor %}
+                                {% if tx.items.all.count > 2 %}...and more{% endif %}
+                            </td>
+                            <td>{{ tx.assigned_vehicle.vehicle_number|default:"N/A" }}</td>
+                            <td class="actions-cell">
+                                <a href="{% url 'stock:process_delivery_return' sale_pk=tx.pk %}" class="btn btn-xs btn-info">
+                                    Process
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p id="noResultsMessage" class="text-center text-base-content/70 py-8 hidden">No pending deliveries match your search.</p>
     {% else %}
         <p class="text-center text-base-content/70 py-8">No transactions are currently pending delivery.</p>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- REAL-TIME SEARCH LOGIC ---
+    const searchInput = document.getElementById('deliverySearchInput');
+    const table = document.getElementById('pendingDeliveriesTable');
+    const tableRows = table ? table.querySelectorAll('tbody tr.delivery-row') : [];
+    const noResultsMessage = document.getElementById('noResultsMessage');
+
+    if (searchInput && tableRows.length > 0) {
+        searchInput.addEventListener('keyup', function () {
+            const searchTerm = searchInput.value.toLowerCase();
+            let visibleRows = 0;
+
+            tableRows.forEach(row => {
+                const rowText = row.textContent.toLowerCase();
+                if (rowText.includes(searchTerm)) {
+                    row.style.display = ''; // Show row
+                    visibleRows++;
+                } else {
+                    row.style.display = 'none'; // Hide row
+                }
+            });
+
+            // Show or hide the "no results" message
+            if (noResultsMessage) {
+                if (visibleRows === 0) {
+                    noResultsMessage.style.display = 'block';
+                } else {
+                    noResultsMessage.style.display = 'none';
+                }
+            }
+        });
+    }
+
+    // --- PRINT BUTTON LOGIC ---
+    const printButton = document.getElementById('printPendingDeliveriesBtn');
+    if (printButton) {
+        printButton.addEventListener('click', function() {
+            window.print();
+        });
+    }
+});
+</script>
 {% endblock %}

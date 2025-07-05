@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Deletion Blocked{% endblock %}
+{% block page_title %}Product Deletion Blocked{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h1 class="card-title text-2xl text-error">Deletion Blocked by Existing Sales</h1>
+            
+            <div class="alert alert-error my-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span>
+                    The system could not delete the selected products because they are referenced in one or more sales transactions. You must handle these sales first.
+                </span>
+            </div>
+
+            <h2 class="text-lg font-semibold mt-4">Products You Tried to Delete:</h2>
+            <ul class="list-disc list-inside bg-base-200 p-4 rounded-md">
+                {% for product in products_to_delete %}
+                    <li>{{ product }}</li>
+                {% endfor %}
+            </ul>
+
+            <div class="divider"></div>
+
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">Conflicting Sales Records ({{ conflicting_sales.count }}):</h2>
+                {% if conflicting_sales %}
+                <a href="{% url 'stock:export_sales_to_excel' %}?ids={% for sale in conflicting_sales %}{{ sale.pk }}{% if not forloop.last %},{% endif %}{% endfor %}" class="btn btn-sm btn-success btn-outline">
+                    Export This List to Excel
+                </a>
+                {% endif %}
+            </div>
+            
+            {% if conflicting_sales %}
+                <div class="overflow-x-auto max-h-96">
+                    <table class="table table-sm table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Tx ID</th>
+                                <th>Date</th>
+                                <th>Customer</th>
+                                <th class="text-right">Revenue</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in conflicting_sales %}
+                                <tr>
+                                    <td>{{ sale.pk }}</td>
+                                    <td>{{ sale.transaction_time|date:"Y-m-d" }}</td>
+                                    <td>{{ sale.customer_shop.name|default:sale.customer_name_manual|default:"N/A" }}</td>
+                                    <td class="text-right">Rs {{ sale.grand_total_revenue|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        <a href="{% url 'stock:all_transactions_list' %}?tx_id={{ sale.pk }}" class="btn btn-xs btn-outline" target="_blank">View</a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="italic text-base-content/70">Could not identify specific conflicting sales.</p>
+            {% endif %}
+
+            <div class="card-actions justify-end mt-8 gap-4">
+                <a href="{% url 'stock:add_product_details' %}" class="btn btn-success">Cancel and Go Back</a>
+                
+                {% if conflicting_sales %}
+                <form method="post" action="{% url 'stock:bulk_delete_sales' %}" onsubmit="return confirm('Are you absolutely sure you want to permanently delete all {{ conflicting_sales.count }} listed sales records? This cannot be undone.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="sales_ids_to_delete" value="{% for sale in conflicting_sales %}{{ sale.pk }}{% if not forloop.last %},{% endif %}{% endfor %}">
+                    <button type="submit" class="btn btn-ghost">Delete All {{ conflicting_sales.count }} Conflicting Sales</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

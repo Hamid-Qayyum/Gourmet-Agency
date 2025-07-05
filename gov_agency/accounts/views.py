@@ -1,6 +1,6 @@
 from django.shortcuts import render,get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Q, F, ExpressionWrapper, DecimalField
+from django.db.models import Sum,When, Case,Value, IntegerField,Q, F, ExpressionWrapper, DecimalField
 from decimal import Decimal
 from django.http import JsonResponse,HttpResponseBadRequest
 from django.contrib import messages
@@ -41,9 +41,20 @@ def vehicle_ledger_summary_view(request, vehicle_pk):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_pk) # Can add user filter if needed
 
     # Find unique shops that had sales assigned to this vehicle
-    associated_shops = Shop.objects.filter(user=request.user,
+    associated_shops_query  = Shop.objects.filter(user=request.user,
         shop_sales_transactions__assigned_vehicle=vehicle
     ).distinct().order_by('name')
+    associated_shops = associated_shops_query.annotate(
+        # Calculate the current balance for each shop
+    balance=Sum('financial_transactions__debit_amount') - Sum('financial_transactions__credit_amount')
+    ).annotate(
+        # Create a temporary 'sort_priority' field
+        sort_priority=Case(
+            When(balance=Decimal('0.00'), then=Value(1)), # Zero balance gets priority 1
+            default=Value(0),                                     # Non-zero balance gets priority 0
+            output_field=IntegerField(),
+        )
+    ).order_by('sort_priority', 'name') # Sort by priority, then by name
 
     # Find unique manual customers that had sales assigned to this vehicle
     manual_customers_for_vehicle = SalesTransaction.objects.filter(
@@ -75,10 +86,20 @@ def vehicle_ledger_summary_view(request, vehicle_pk):
 @login_required
 def store_ledger_summary_view(request):
     # Find unique shops that had sales with NO vehicle assigned
-    associated_shops = Shop.objects.filter(user = request.user,
+    associated_shops_query = Shop.objects.filter(user = request.user,
     shop_sales_transactions__assigned_vehicle__isnull=True
     ).distinct().order_by('name')
 
+    associated_shops = associated_shops_query.annotate(
+        # Use 'balance' here as well for consistency
+        balance=Sum('financial_transactions__debit_amount') - Sum('financial_transactions__credit_amount')
+    ).annotate(
+        sort_priority=Case(
+            When(balance=Decimal('0.00'), then=Value(1)),
+            default=Value(0),
+            output_field=IntegerField(),
+        )
+    ).order_by('sort_priority', 'name')
     # Find unique manual customers that had sales with NO vehicle
     manual_customers_for_store = SalesTransaction.objects.filter(
         user=request.user,

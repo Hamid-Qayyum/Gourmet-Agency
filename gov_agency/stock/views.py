@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from .models import AddProduct, ProductDetail,Sale, Vehicle, Shop, SalesTransaction, SalesTransactionItem
 from accounts.models import ShopFinancialTransaction  # model from account app
 from django.contrib import messages
-from django.db.models  import Q
+from django.db.models  import Q,ProtectedError
 from django.db import transaction # For atomic operations
 from django.http import JsonResponse
 from decimal import Decimal
@@ -25,6 +25,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
 from expense.models import Expense
+
 
 
 
@@ -145,8 +146,7 @@ def add_product_details(request):
     if query:
         product_details_qs = product_details_qs.filter(
             Q(product_base__name__icontains=query)|
-            Q(packing_type__icontains=query)|
-            Q(notes__icontains=query)
+            Q(packing_type__icontains=query)
         )
 
     # Check if the current user has any base products to select from for the form
@@ -170,9 +170,21 @@ def add_product_details(request):
 def product_detail_delete_selected_view(request):
     if request.method == 'POST':
         selected_ids = request.POST.getlist('selected_details_ids')
+        products_to_delete = ProductDetail.objects.filter(id__in=selected_ids, user=request.user)
         if selected_ids:
-            ProductDetail.objects.filter(id__in=selected_ids, user=request.user).delete()
-            messages.success(request, f"{len(selected_ids)} product detail(s) deleted successfully.")
+            try:
+                ProductDetail.objects.filter(id__in=selected_ids, user=request.user).delete()
+                messages.success(request, f"{len(selected_ids)} product detail(s) deleted successfully.")
+            except ProtectedError as e:
+                protected_sales_items = e.protected_objects
+                protected_transaction_ids = {item.transaction.id for item in protected_sales_items}
+                conflicting_sales = SalesTransaction.objects.filter(id__in=protected_transaction_ids).distinct()
+                messages.error(request, "Deletion failed because these products are part of existing sales records. Please review and handle these sales first.")
+                context = {
+                    'products_to_delete': products_to_delete,
+                    'conflicting_sales': conflicting_sales,
+                }
+                return render(request, 'stock/deletion_blocked_by_sales.html', context)
     return redirect('stock:add_product_details')
 
 @login_required
@@ -430,6 +442,41 @@ def sales_processing_view(request):
 
 
 
+@login_required
+def bulk_delete_sales_view(request):
+    """
+    Handles the deletion of a specific list of sales transactions,
+    typically those that are blocking a product deletion.
+    """
+    if request.method == 'POST':
+        sales_ids_str = request.POST.get('sales_ids_to_delete')
+        if sales_ids_str:
+            try:
+                # Convert the string of IDs '1,2,3' into a list of integers
+                sales_ids = [int(id_str) for id_str in sales_ids_str.split(',') if id_str.isdigit()]
+                
+                # Fetch the transactions belonging to the current user to ensure security
+                transactions_to_delete = SalesTransaction.objects.filter(pk__in=sales_ids, user=request.user)
+                
+                count = transactions_to_delete.count()
+                
+                if count > 0:
+                    transactions_to_delete.delete()
+                    messages.success(request, f"Successfully deleted {count} conflicting sales record(s). You may now try deleting the product(s) again.")
+                else:
+                    messages.warning(request, "No matching sales records were found to delete.")
+
+            except Exception as e:
+                messages.error(request, f"An error occurred while deleting sales: {str(e)}")
+        else:
+            messages.warning(request, "No sales IDs were provided for deletion.")
+
+    # Always redirect back to the product details page, as the user's task is now to re-attempt the product deletion.
+    return redirect('stock:add_product_details')
+
+
+
+
 # AJAX endpoint to get details for a selected product_detail_batch
 # This is used by JavaScript to auto-fill parts of the SaleForm
 @login_required
@@ -502,54 +549,69 @@ def all_transactions_list_view(request):
 def export_sales_to_excel(request):
     """
     Handles the export of sales transactions to an Excel (.xlsx) file.
-    It reuses the same filtering logic as the main list view.
+    Can be filtered by a date range OR a specific list of transaction IDs.
     """
-    # 1. Reuse the exact same data fetching and filtering logic from your list view
-    #    but WITHOUT pagination.
+    # Start with the base queryset for the logged-in user
     transactions_list = SalesTransaction.objects.filter(user=request.user)
 
-    start_date = request.GET.get('start_date')
-    end_date = request.GET.get('end_date')
-
-    if start_date and not end_date:
-        transactions_list = transactions_list.filter(transaction_time__date=start_date)
+    # --- NEW: Check for a specific list of IDs first ---
+    ids_to_export_str = request.GET.get('ids')
+    if ids_to_export_str:
+        try:
+            # Convert comma-separated string of IDs to a list of integers
+            ids_list = [int(id_str) for id_str in ids_to_export_str.split(',') if id_str.isdigit()]
+            if ids_list:
+                transactions_list = transactions_list.filter(pk__in=ids_list)
+        except (ValueError, TypeError):
+            # If IDs are invalid, ignore and proceed to date filters
+            pass
     else:
-        if start_date:
-            transactions_list = transactions_list.filter(transaction_time__date__gte=start_date)
-        if end_date:
-            transactions_list = transactions_list.filter(transaction_time__date__lte=end_date)
+        # --- EXISTING DATE FILTER LOGIC ---
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+
+        if start_date and not end_date:
+            transactions_list = transactions_list.filter(transaction_time__date=start_date)
+        else:
+            if start_date:
+                transactions_list = transactions_list.filter(transaction_time__date__gte=start_date)
+            if end_date:
+                transactions_list = transactions_list.filter(transaction_time__date__lte=end_date)
 
     # Apply optimizations and ordering
     transactions_list = transactions_list.select_related(
         'customer_shop', 'assigned_vehicle'
+    ).prefetch_related( # Prefetch items and their nested details for performance
+        'items__product_detail_snapshot__product_base'
     ).order_by('-transaction_time')
 
-    # 2. Create the Excel Workbook and Worksheet in memory
+    # Create the Excel Workbook and Worksheet in memory
     wb = Workbook()
     ws = wb.active
     ws.title = "Sales Report"
 
-    # 3. Define the Headers and add them to the first row
+    # Define the Headers
     columns = [
         "Tx ID", "Date", "Time", "Customer", "Payment", "Status",
         "Total Revenue", "Total Profit", "Notes",  # Transaction-level info
-        "Product Name","Price Per Unit" ,"Quantity Sold", "Returned","Discount" ,"Unit", # Item-level info
+        "Product Name", "Price Per Unit", "Quantity Sold", "Returned", "Discount %", "Unit", # Item-level info
     ]
     ws.append(columns)
 
     # Style the header row (bold font)
     bold_font = Font(bold=True)
-    for col_num, column_title in enumerate(columns, 1):
+    for col_num in range(1, len(columns) + 1):
         cell = ws.cell(row=1, column=col_num)
         cell.font = bold_font
 
-    # 4. Loop through the queryset and append data rows
+    # Loop through the queryset and append data rows
     for tx in transactions_list:
-        # Using .all() on a prefetched queryset is free, no DB hit here.
+        # Using .all() on a prefetched queryset is efficient (no extra DB hit here)
         all_items = tx.items.all()
         customer_name = tx.customer_shop.name if tx.customer_shop else tx.customer_name_manual or "N/A"
 
-        for item in all_items:
+        # If a transaction has no items, we might still want to log it
+        if not all_items:
             row = [
                 tx.pk,
                 tx.transaction_time.date(),
@@ -557,36 +619,52 @@ def export_sales_to_excel(request):
                 customer_name,
                 tx.get_payment_type_display(),
                 tx.get_status_display(),
-                f'Rs {tx.grand_total_revenue}',
-                f'Rs {tx.calculated_grand_profit}',
+                tx.grand_total_revenue, # Use number format for better sorting in Excel
+                tx.calculated_grand_profit,
                 tx.notes,
-                item.product_detail_snapshot.product_base.name,
-                f'{item.product_detail_snapshot.price_per_item}',
-                f'{item.quantity_sold_decimal}',
-                f'{item.returned_quantity_decimal}',
-                f'{tx.total_discount_amount}',
-                f'{item.product_detail_snapshot.quantity_in_packing} {item.product_detail_snapshot.unit_of_measure}',
             ]
             ws.append(row)
+        else:
+            # If there are items, create a row for each one
+            for item in all_items:
+                row = [
+                    tx.pk,
+                    tx.transaction_time.date(),
+                    tx.transaction_time.time().strftime('%H:%M:%S'),
+                    customer_name,
+                    tx.get_payment_type_display(),
+                    tx.get_status_display(),
+                    tx.grand_total_revenue,
+                    tx.calculated_grand_profit,
+                    tx.notes,
+                    item.product_detail_snapshot.product_base.name,
+                    item.selling_price_per_item, # Use number format
+                    item.quantity_sold_decimal,
+                    item.returned_quantity_decimal,
+                    f'{item.discount_percentage}%', # CORRECTED: Show item-specific discount
+                    f'{item.product_detail_snapshot.quantity_in_packing} {item.product_detail_snapshot.unit_of_measure}',
+                ]
+                ws.append(row)
 
-
-    # 5. Auto-size columns for better readability
+    # Auto-size columns for better readability
     for col_num, column_title in enumerate(columns, 1):
         column_letter = get_column_letter(col_num)
         ws.column_dimensions[column_letter].autosize = True
 
-    # 6. Prepare the HTTP response to serve the file
+    # Prepare the HTTP response to serve the file
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
     # Define a dynamic filename
     filename = "sales_report.xlsx"
-    if start_date and end_date:
+    if ids_to_export_str:
+        filename = "conflicting_sales_export.xlsx"
+    elif start_date and end_date:
         filename = f"sales_{start_date}_to_{end_date}.xlsx"
     elif start_date:
         filename = f"sales_{start_date}.xlsx"
         
-    response['Content-Disposition'] = f'attachment; filename={filename}'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     # Save the workbook to the response
     wb.save(response)

@@ -32,7 +32,7 @@
                 <tr>
                     <th>Date</th>
                     <th class="text-right">Total Revenue</th>
-                    <th class="text-right">Gross Profit</th>
+                    {% comment %} <th class="text-right">Gross Profit</th> {% endcomment %}
                     <th class="text-right">Expenses</th>
                     <th class="text-right">Credit Sales</th>
                     <th class="text-right">Online Sales</th>
@@ -47,7 +47,7 @@
                 <tr class="hover">
                     <td class="font-semibold">{{ summary.summary_date|date:"l, M j" }}</td>
                     <td class="text-right text-info">Rs {{ summary.total_revenue|floatformat:2|intcomma }}</td>
-                    <td class="text-right {% if summary.total_profit > 0 %}text-success{% else %}text-error{% endif %}">Rs {{ summary.total_profit|floatformat:2|intcomma }}</td>
+                    {% comment %} <td class="text-right {% if summary.total_profit > 0 %}text-success{% else %}text-error{% endif %}">Rs {{ summary.total_profit|floatformat:2|intcomma }}</td> {% endcomment %}
                     <td class="text-right text-warning">- Rs {{ summary.total_expense|floatformat:2|intcomma }}</td>
                     <td class="text-right text-orange-500">- Rs {{ summary.credit_sales_today|floatformat:2|intcomma }}</td>
                     <td class="text-right text-purple-500">- Rs {{ summary.online_sales_today|floatformat:2|intcomma }}</td>

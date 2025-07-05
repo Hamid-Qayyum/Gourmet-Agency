@@ -19,6 +19,7 @@ urlpatterns = [
    # views about adding product details ............
    path('add_product_details/',views.add_product_details, name='add_product_details'),
    path('product-details/delete/', views.product_detail_delete_selected_view, name='product_detail_delete_selected'),
+   path('sales/bulk_delete/', views.bulk_delete_sales_view, name='bulk_delete_sales'),
    path('product-details/update/<int:pk>/', views.product_detail_update_view, name='product_detail_update'),
    path('product-details/add-stock/<int:pk>/', views.add_stock_to_product_detail_view, name='add_stock_to_product_detail'),
 
