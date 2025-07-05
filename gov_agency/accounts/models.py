@@ -154,3 +154,36 @@ class CustomAccountTransaction(models.Model):
         ordering = ['-transaction_date', '-pk']
         verbose_name = "Custom Account Transaction"
         verbose_name_plural = "Custom Account Transactions"
+
+
+
+
+class DailySummary(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="daily_summaries")
+    summary_date = models.DateField(unique=True, help_text="The specific date this summary represents.")
+    
+    # --- REPORTING METRICS (Value of business done) ---
+    total_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    total_profit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+    credit_sales_today = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Value of ONLY credit sales made today.")
+    online_sales_today = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
+
+    # --- CASH FLOW METRICS (Actual cash movement) ---
+    total_expense = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Total cash paid out for expenses.")
+    total_cash_received = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Cash received from paying off past credit sales.")
+    
+    # 1. Physical cash in hand
+    net_physical_cash = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Net for physical cash only: (CASH Sales + Credit Payments) - Expenses.")
+    
+    # 2. Total settlement including bank/online transactions
+    net_total_settlement = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Net including online: (CASH+ONLINE Sales + Credit Payments) - Expenses.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Summary for {self.summary_date.strftime('%Y-%m-%d')} by {self.user.username}"
+
+    class Meta:
+        ordering = ['-summary_date']
+        verbose_name = "Daily Financial Summary"
+        verbose_name_plural = "Daily Financial Summaries"
+        unique_together = [['user', 'summary_date']]

@@ -87,6 +87,11 @@
                         Expenses
                     </a>
                 </li>
+                 <li>
+                    <a href="{% url 'accounts:daily_summary_list' %}" class="{% if request.resolver_match.url_name == 'daily_summary_list' %}active{% endif %}">
+                        Daily Summary
+                    </a>
+                </li>
            
                  <details class="mt-4 group">
                 <summary class="cursor-pointer flex items-center gap-2 text-black hover:bg-gray-100 px-2 py-1 rounded-md">

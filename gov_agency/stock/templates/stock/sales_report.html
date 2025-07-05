@@ -15,42 +15,121 @@
     <p class="text-center text-sm text-base-content/70 mb-8">Generated: {{ report_generation_time|date:"F j, Y, P" }}</p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        <!-- Today's Stats -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
-            <h2 class="card-title">Today</h2>
-            <div class="stats stats-vertical shadow bg-transparent">
-                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_today.transactions_count|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_today.total_grand_revenue|floatformat:2|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_today.total_grand_profit > 0 %}text-success{% elif stats_today.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_today.total_grand_profit|floatformat:2|intcomma }}</div></div>
+        <!-- Card for Today's Stats -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center p-4">
+                <h2 class="card-title">Today</h2>
+                <div class="stats stats-vertical shadow bg-transparent w-full">
+                    <div class="stat p-3">
+                        <div class="stat-title">Transactions</div>
+                        <div class="stat-value text-sm">{{ stats_today.transactions_count|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Revenue</div>
+                        <div class="stat-value text-sm text-secondary">Rs {{ stats_today.total_grand_revenue|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Gross Profit</div>
+                        <div class="stat-value text-sm {% if stats_today.total_grand_profit > 0 %}text-success{% elif stats_today.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_today.total_grand_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Expenses</div>
+                        <div class="stat-value text-sm text-warning">- Rs {{ stats_today.total_expense|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3 border-t-2 border-base-300 mt-2">
+                        <div class="stat-title font-bold">NET PROFIT</div>
+                        <div class="stat-value font-bold {% if stats_today.net_profit > 0 %}text-success{% elif stats_today.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_today.net_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
             </div>
-        </div></div>
-        <!-- This Week -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
-            <h2 class="card-title">This Week</h2>
-            <div class="stats stats-vertical shadow bg-transparent">
-                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_this_week.transactions_count|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_week.total_grand_revenue|floatformat:2|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_week.total_grand_profit > 0 %}text-success{% elif stats_this_week.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_week.total_grand_profit|floatformat:2|intcomma }}</div></div>
+        </div>
+
+        <!-- Card for This Week's Stats -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center p-4">
+                <h2 class="card-title">This Week</h2>
+                <div class="stats stats-vertical shadow bg-transparent w-full">
+                    <div class="stat p-3">
+                        <div class="stat-title">Transactions</div>
+                        <div class="stat-value text-sm">{{ stats_this_week.transactions_count|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Revenue</div>
+                        <div class="stat-value text-sm text-secondary">Rs {{ stats_this_week.total_grand_revenue|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Gross Profit</div>
+                        <div class="stat-value text-sm {% if stats_this_week.total_grand_profit > 0 %}text-success{% elif stats_this_week.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_week.total_grand_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Expenses</div>
+                        <div class="stat-value text-sm text-warning">- Rs {{ stats_this_week.total_expense|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3 border-t-2 border-base-300 mt-2">
+                        <div class="stat-title font-bold">NET PROFIT</div>
+                        <div class="stat-value font-bold {% if stats_this_week.net_profit > 0 %}text-success{% elif stats_this_week.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_week.net_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
             </div>
-        </div></div>
-        <!-- This Month -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
-            <h2 class="card-title">This Month</h2>
-            <div class="stats stats-vertical shadow bg-transparent">
-                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_this_month.transactions_count|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_month.total_grand_revenue|floatformat:2|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_month.total_grand_profit > 0 %}text-success{% elif stats_this_month.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_month.total_grand_profit|floatformat:2|intcomma }}</div></div>
+        </div>
+
+        <!-- Card for This Month's Stats -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center p-4">
+                <h2 class="card-title">This Month</h2>
+                <div class="stats stats-vertical shadow bg-transparent w-full">
+                    <div class="stat p-3">
+                        <div class="stat-title">Transactions</div>
+                        <div class="stat-value text-sm">{{ stats_this_month.transactions_count|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Revenue</div>
+                        <div class="stat-value text-sm text-secondary">Rs {{ stats_this_month.total_grand_revenue|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Gross Profit</div>
+                        <div class="stat-value text-sm {% if stats_this_month.total_grand_profit > 0 %}text-success{% elif stats_this_month.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_month.total_grand_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Expenses</div>
+                        <div class="stat-value text-sm text-warning">- Rs {{ stats_this_month.total_expense|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3 border-t-2 border-base-300 mt-2">
+                        <div class="stat-title font-bold">NET PROFIT</div>
+                        <div class="stat-value font-bold {% if stats_this_month.net_profit > 0 %}text-success{% elif stats_this_month.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_month.net_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
             </div>
-        </div></div>
-        <!-- This Year -->
-        <div class="card bg-base-100 shadow-xl"><div class="card-body items-center text-center">
-            <h2 class="card-title">This Year</h2>
-            <div class="stats stats-vertical shadow bg-transparent">
-                <div class="stat"><div class="stat-title">Transactions</div><div class="stat-value">{{ stats_this_year.transactions_count|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Revenue</div><div class="stat-value text-secondary">Rs {{ stats_this_year.total_grand_revenue|floatformat:2|intcomma }}</div></div>
-                <div class="stat"><div class="stat-title">Profit</div><div class="stat-value {% if stats_this_year.total_grand_profit > 0 %}text-success{% elif stats_this_year.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_year.total_grand_profit|floatformat:2|intcomma }}</div></div>
+        </div>
+
+        <!-- Card for This Year's Stats -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body items-center text-center p-4">
+                <h2 class="card-title">This Year</h2>
+                <div class="stats stats-vertical shadow bg-transparent w-full">
+                    <div class="stat p-3">
+                        <div class="stat-title">Transactions</div>
+                        <div class="stat-value text-sm">{{ stats_this_year.transactions_count|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Revenue</div>
+                        <div class="stat-value text-sm text-secondary">Rs {{ stats_this_year.total_grand_revenue|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Gross Profit</div>
+                        <div class="stat-value text-sm {% if stats_this_year.total_grand_profit > 0 %}text-success{% elif stats_this_year.total_grand_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_year.total_grand_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3">
+                        <div class="stat-title">Expenses</div>
+                        <div class="stat-value text-sm text-warning">- Rs {{ stats_this_year.total_expense|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="stat p-3 border-t-2 border-base-300 mt-2">
+                        <div class="stat-title font-bold">NET PROFIT</div>
+                        <div class="stat-value font-bold {% if stats_this_year.net_profit > 0 %}text-success{% elif stats_this_year.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_year.net_profit|floatformat:2|intcomma }}</div>
+                    </div>
+                </div>
             </div>
-        </div></div>
+        </div>
     </div>
 
     <div class="divider my-8">Visual Charts</div>
@@ -64,22 +143,17 @@
 {% block extra_scripts %}
 {{ block.super }}
 <script>
-// Chart.js script from previous answer, should still work as it expects
-// daily_chart_labels, daily_chart_revenue, monthly_chart_labels, monthly_chart_revenue
-// which are still being passed with data from SalesTransaction.grand_total_revenue.
 document.addEventListener('DOMContentLoaded', function() {
     const dailyCtx = document.getElementById('dailyRevenueChart');
     if (dailyCtx) {
         const dailyLabels = JSON.parse('{{ daily_chart_labels|escapejs|default:"[]" }}');
         const dailyRevenue = JSON.parse('{{ daily_chart_revenue|escapejs|default:"[]" }}');
-        // ... (rest of daily chart init)
-         new Chart(dailyCtx, {type: 'line',data: {labels: dailyLabels,datasets: [{label: 'Daily Revenue (Rs)',data: dailyRevenue,borderColor: 'hsl(var(--p))',backgroundColor: 'hsla(var(--p)/.2)',tension: 0.1,fill: true,}]},options: {responsive: true,maintainAspectRatio: false,scales: {y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }}}});
+        new Chart(dailyCtx, {type: 'line',data: {labels: dailyLabels,datasets: [{label: 'Daily Revenue (Rs)',data: dailyRevenue,borderColor: 'hsl(var(--p))',backgroundColor: 'hsla(var(--p)/.2)',tension: 0.1,fill: true,}]},options: {responsive: true,maintainAspectRatio: false,scales: {y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }}}});
     }
     const monthlyCtx = document.getElementById('monthlyRevenueChart');
     if (monthlyCtx) {
         const monthlyLabels = JSON.parse('{{ monthly_chart_labels|escapejs|default:"[]" }}');
         const monthlyRevenue = JSON.parse('{{ monthly_chart_revenue|escapejs|default:"[]" }}');
-        // ... (rest of monthly chart init)
         new Chart(monthlyCtx, {type: 'bar',data: {labels: monthlyLabels,datasets: [{label: 'Monthly Revenue (Rs)',data: monthlyRevenue,backgroundColor: 'hsl(var(--s))',borderColor: 'hsl(var(--s))',borderWidth: 1}]},options: {responsive: true,maintainAspectRatio: false,scales: {y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rs ' + value; } } }}}});
     }
 });

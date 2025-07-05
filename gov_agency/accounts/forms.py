@@ -132,3 +132,18 @@ class CustomTransactionEntryForm(forms.ModelForm):
         if debit > 0 and credit > 0:
             raise forms.ValidationError("You cannot enter both Debit and Credit. Use two separate entries.")
         return cleaned_data
+    
+
+
+
+class DateFilterForm(forms.Form):
+    date_filter = forms.DateField(
+        required=False,
+        label="Filter by Date",
+        widget=forms.DateInput(
+            attrs={
+                'class': 'input input-sm input-bordered w-full max-w-xs',
+                'type': 'date'
+            }
+        )
+    )

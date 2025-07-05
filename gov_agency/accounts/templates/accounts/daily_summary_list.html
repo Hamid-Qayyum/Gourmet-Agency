@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Daily Financial Summaries{% endblock %}
+{% block page_title %}Daily Summaries{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    {# ... Filter and Generate buttons are unchanged ... #}
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <!-- Filter Form -->
+        <form method="get" action="" class="flex items-end gap-2">
+            <div>
+                <label for="{{ filter_form.date_filter.id_for_label }}" class="label-text">{{ filter_form.date_filter.label }}</label>
+                {{ filter_form.date_filter }}
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+            <a href="{% url 'accounts:daily_summary_list' %}" class="btn btn-sm btn-ghost">Clear</a>
+        </form>
+
+        <!-- Generate Summary Button -->
+        <form method="post" action="{% url 'accounts:generate_today_summary' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-accent">Generate/Update Today's Summary</button>
+        </form>
+    </div>
+
+    <!-- Summary List Table -->
+    <div class="overflow-x-auto bg-base-100 rounded-box shadow">
+        <table class="table table-sm w-full">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th class="text-right">Total Revenue</th>
+                    <th class="text-right">Gross Profit</th>
+                    <th class="text-right">Expenses</th>
+                    <th class="text-right">Credit Sales</th>
+                    <th class="text-right">Online Sales</th>
+                    <th class="text-right">Cash Received</th>
+                    <th class="text-right font-bold">Net Settlement</th> <!-- RENAMED & UPDATED -->
+                    <th class="text-right font-bold">Net Physical Cash</th> <!-- NEW -->
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for summary in summaries %}
+                <tr class="hover">
+                    <td class="font-semibold">{{ summary.summary_date|date:"l, M j" }}</td>
+                    <td class="text-right text-info">Rs {{ summary.total_revenue|floatformat:2|intcomma }}</td>
+                    <td class="text-right {% if summary.total_profit > 0 %}text-success{% else %}text-error{% endif %}">Rs {{ summary.total_profit|floatformat:2|intcomma }}</td>
+                    <td class="text-right text-warning">- Rs {{ summary.total_expense|floatformat:2|intcomma }}</td>
+                    <td class="text-right text-orange-500">- Rs {{ summary.credit_sales_today|floatformat:2|intcomma }}</td>
+                    <td class="text-right text-purple-500">- Rs {{ summary.online_sales_today|floatformat:2|intcomma }}</td>
+                    <td class="text-right text-cyan-500">+ Rs {{ summary.total_cash_received|floatformat:2|intcomma }}</td>
+                    
+                    <!-- Total Settlement (Including Online) -->
+                    <td class="text-right font-bold text-lg {% if summary.net_total_settlement > 0 %}text-success{% else %}text-error{% endif %}">
+                        Rs {{ summary.net_total_settlement|floatformat:2|intcomma }}
+                    </td>
+
+                    <!-- Physical Cash Only -->
+                    <td class="text-right font-bold text-lg {% if summary.net_physical_cash > 0 %}text-success{% else %}text-error{% endif %}">
+                        Rs {{ summary.net_physical_cash|floatformat:2|intcomma }}
+                    </td>
+
+                    <td class="text-center">
+                        <label for="delete_modal_{{ summary.pk }}" class="btn btn-xs btn-outline btn-error">Delete</label>
+                    </td>
+                </tr>
+
+                <!-- Delete Confirmation Modal for each row -->
+                <input type="checkbox" id="delete_modal_{{ summary.pk }}" class="modal-toggle" />
+                <div class="modal" role="dialog">
+                    <div class="modal-box">
+                        <h3 class="font-bold text-lg text-error">Confirm Deletion</h3>
+                        <p class="py-4">Are you sure you want to delete the financial summary for <strong>{{ summary.summary_date|date:"F j, Y" }}</strong>? This action cannot be undone.</p>
+                        <div class="modal-action">
+                            <label for="delete_modal_{{ summary.pk }}" class="btn btn-ghost">Cancel</label>
+                            <form method="post" action="{% url 'accounts:delete_daily_summary' summary_pk=summary.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-error">Yes, Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                    <label class="modal-backdrop" for="delete_modal_{{ summary.pk }}">Close</label>
+                </div>
+                {% empty %}
+                <tr>
+                    <td colspan="10" class="text-center text-base-content/70 py-8">
+                        No financial summaries found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

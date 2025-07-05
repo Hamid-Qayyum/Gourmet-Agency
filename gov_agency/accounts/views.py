@@ -10,6 +10,10 @@ from django.utils import timezone
 from urllib.parse import quote # For safely encoding names in URLs
 from .models import ShopFinancialTransaction,CustomAccount,CustomAccountTransaction
 from .forms import EditFinancialTransactionForm,CustomAccountForm,CustomTransactionEntryForm
+from stock.models import SalesTransaction
+from expense.models import Expense
+from .models import ShopFinancialTransaction, DailySummary # <-- Import the new model
+from .forms import DateFilterForm 
 
 
 
@@ -435,3 +439,99 @@ def delete_custom_account_card_view(request, account_pk):
 
     # Always redirect back to the hub page
     return redirect('accounts:custom_account_hub')
+
+
+
+
+
+
+
+# daily summary views ...
+@login_required
+def daily_summary_list_view(request):
+    """
+    Displays a list of daily financial summaries and allows for generating
+    a new summary for today.
+    """
+    summaries = DailySummary.objects.filter(user=request.user)
+    
+    # Handle date filtering
+    filter_form = DateFilterForm(request.GET)
+    if filter_form.is_valid():
+        date_filter = filter_form.cleaned_data.get('date_filter')
+        if date_filter:
+            summaries = summaries.filter(summary_date=date_filter)
+
+    context = {
+        'summaries': summaries,
+        'filter_form': filter_form,
+    }
+    return render(request, 'accounts/daily_summary_list.html', context)
+
+
+@login_required
+def generate_today_summary_view(request):
+    if request.method == 'POST':
+        today = timezone.localdate()
+
+        # --- GATHER DATA ---
+        sales_today = SalesTransaction.objects.filter(user=request.user, transaction_time__date=today)
+        expenses_today = Expense.objects.filter(user=request.user, expense_date__date=today)
+        shop_financial_entries_today = ShopFinancialTransaction.objects.filter(user=request.user, transaction_date__date=today)
+        custom_account_entries_today = CustomAccountTransaction.objects.filter(user=request.user, transaction_date__date=today)
+
+        # --- CALCULATE REPORTING & CASH FLOW COMPONENTS ---
+        total_revenue = sales_today.aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
+        total_profit = sum(sale.calculated_grand_profit for sale in sales_today) or Decimal('0.00')
+        total_expense = expenses_today.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        credit_sales_today = sales_today.filter(payment_type='CREDIT').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
+        online_sales_today = sales_today.filter(payment_type='ONLINE').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
+        
+        cash_from_shops = sum(entry.credit_amount for entry in shop_financial_entries_today if entry.transaction_type == 'CASH_RECEIPT')
+        cash_from_custom_accounts = custom_account_entries_today.aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        total_cash_received = cash_from_shops + cash_from_custom_accounts
+        
+        # --- CALCULATE THE TWO FINAL NET VALUES ---
+        
+        # 1. Net Physical Cash: Only includes 'CASH' sales.
+        cash_from_cash_sales = sales_today.filter(payment_type='CASH').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
+        net_physical_cash = (cash_from_cash_sales + total_cash_received) - total_expense
+        
+        # 2. Net Total Settlement: Includes both 'CASH' and 'ONLINE' sales.
+        cash_from_direct_sales = sales_today.filter(payment_type__in=['CASH', 'ONLINE']).aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
+        net_total_settlement = (cash_from_direct_sales + total_cash_received) - total_expense
+        
+        # --- SAVE THE SUMMARY ---
+        summary, created = DailySummary.objects.update_or_create(
+            user=request.user,
+            summary_date=today,
+            defaults={
+                'total_revenue': total_revenue,
+                'total_profit': total_profit,
+                'credit_sales_today': credit_sales_today,
+                'online_sales_today': online_sales_today,
+                'total_expense': total_expense,
+                'total_cash_received': total_cash_received,
+                'net_physical_cash': net_physical_cash,       # Save new value
+                'net_total_settlement': net_total_settlement, # Save new value
+            }
+        )
+        
+        if created:
+            messages.success(request, f"Successfully generated financial summary for {today.strftime('%B %d, %Y')}.")
+        else:
+            messages.info(request, f"Successfully updated financial summary for {today.strftime('%B %d, %Y')}.")
+
+    return redirect('accounts:daily_summary_list')
+
+@login_required
+def delete_daily_summary_view(request, summary_pk):
+    """
+    Deletes a specific daily summary record.
+    """
+    summary = get_object_or_404(DailySummary, pk=summary_pk, user=request.user)
+    if request.method == 'POST':
+        summary_date_str = summary.summary_date.strftime('%B %d, %Y')
+        summary.delete()
+        messages.error(request, f"Deleted the financial summary for {summary_date_str}.")
+    return redirect('accounts:daily_summary_list')

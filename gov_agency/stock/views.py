@@ -24,6 +24,8 @@ from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
+from expense.models import Expense
+
 
 
 
@@ -762,72 +764,95 @@ def sales_report_view(request):
     today = timezone.localdate()
     # ... (date range setup: start_of_today_dt, end_of_today_dt, etc. - as before) ...
     # Ensure these are timezone-aware datetimes for comparison with transaction_time
-    start_of_today_dt = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
-    end_of_today_dt = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+    start_of_today  = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    end_of_today  = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+
     # ... similarly for week, month, year ...
-    start_of_week_dt = timezone.make_aware(timezone.datetime.combine(today - timedelta(days=today.weekday()), timezone.datetime.min.time()))
-    end_of_week_dt = timezone.make_aware(timezone.datetime.combine(start_of_week_dt.date() + timedelta(days=6), timezone.datetime.max.time()))
-    start_of_month_dt = timezone.make_aware(timezone.datetime.combine(today.replace(day=1), timezone.datetime.min.time()))
-    if today.month == 12:
-        end_of_month_dt = timezone.make_aware(timezone.datetime.combine(today.replace(year=today.year + 1, month=1, day=1) - timedelta(days=1), timezone.datetime.max.time()))
-    else:
-        end_of_month_dt = timezone.make_aware(timezone.datetime.combine(today.replace(month=today.month + 1, day=1) - timedelta(days=1), timezone.datetime.max.time()))
-    start_of_year_dt = timezone.make_aware(timezone.datetime.combine(today.replace(month=1, day=1), timezone.datetime.min.time()))
-    end_of_year_dt = timezone.make_aware(timezone.datetime.combine(today.replace(month=12, day=31), timezone.datetime.max.time()))
+    start_of_week = start_of_today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6, hours=23, minutes=59, seconds=59)
+
+    start_of_month = start_of_today.replace(day=1)
+    next_month = start_of_month.replace(day=28) + timedelta(days=4)
+    end_of_month = next_month - timedelta(days=next_month.day)
+    end_of_month = timezone.make_aware(timezone.datetime.combine(end_of_month.date(), timezone.datetime.max.time()))
+    
+    start_of_year = start_of_today.replace(month=1, day=1)
+    end_of_year = start_of_year.replace(year=start_of_year.year + 1) - timedelta(days=1)
+    end_of_year = timezone.make_aware(timezone.datetime.combine(end_of_year.date(), timezone.datetime.max.time()))
 
 
-    def get_transaction_stats(queryset):
-        # Materialize queryset once if iterating multiple times for different properties
-        materialized_qs = list(queryset) # Or queryset if only iterating once
+    def get_period_stats(start_dt, end_dt):
+        """
+        Helper function to get sales and expense stats for a given period.
+        """
+        transactions = SalesTransaction.objects.filter(
+            user=request.user, 
+            transaction_time__range=(start_dt, end_dt)
+        )
+        expenses = Expense.objects.filter(
+            user=request.user, 
+            expense_date__range=(start_dt, end_dt)
+        )
         
-        total_revenue = sum(tx.grand_total_revenue for tx in materialized_qs)
-        total_profit = sum(tx.calculated_grand_profit for tx in materialized_qs)
+        total_revenue = sum(tx.grand_total_revenue for tx in transactions)
+        total_profit = sum(tx.calculated_grand_profit for tx in transactions)
+        total_expense = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                
+        net_profit = total_profit - total_expense
+
+
         
-        stats = {
-            'transactions_count': len(materialized_qs),
-            'total_grand_revenue': total_revenue or Decimal('0.00'),
-            'total_grand_profit': total_profit or Decimal('0.00'),
+        return {
+            'transactions_count': transactions.count(),
+            'total_grand_revenue': total_revenue,
+            'total_grand_profit': total_profit,
+            'total_expense': total_expense,
+            'net_profit': net_profit,
         }
-        return stats
 
-    stats_today = get_transaction_stats(SalesTransaction.objects.filter(user=request.user, transaction_time__gte=start_of_today_dt, transaction_time__lte=end_of_today_dt))
-    stats_this_week = get_transaction_stats(SalesTransaction.objects.filter(user=request.user, transaction_time__gte=start_of_week_dt, transaction_time__lte=end_of_week_dt))
-    stats_this_month = get_transaction_stats(SalesTransaction.objects.filter(user=request.user, transaction_time__gte=start_of_month_dt, transaction_time__lte=end_of_month_dt))
-    stats_this_year = get_transaction_stats(SalesTransaction.objects.filter(user=request.user, transaction_time__gte=start_of_year_dt, transaction_time__lte=end_of_year_dt))
+    stats_today = get_period_stats(start_of_today, end_of_today)
+    stats_this_week = get_period_stats(start_of_week, end_of_week)
+    stats_this_month = get_period_stats(start_of_month, end_of_month)
+    stats_this_year = get_period_stats(start_of_year, end_of_year)
 
     # --- Data for Charts (using SalesTransaction) ---
     daily_labels = []
     daily_revenue_data = []
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
-        start_of_day = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
-        end_of_day = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
-        tx_on_day = SalesTransaction.objects.filter(user=request.user, transaction_time__gte=start_of_day, transaction_time__lte=end_of_day)
+        start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
+        end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
+
+        tx_on_day = SalesTransaction.objects.filter(user=request.user, transaction_time__range=(start, end))
         daily_revenue = sum(tx.grand_total_revenue for tx in tx_on_day) or Decimal('0.00')
-        daily_labels.append(day.strftime("%b %d"))
+
+        daily_labels.append(day.strftime("%a")) # Short day name e.g., "Mon"
         daily_revenue_data.append(float(daily_revenue))
 
+
+
+    # ... Monthly chart data logic ...
     monthly_labels = []
     monthly_revenue_data = []
     for i in range(5, -1, -1):
         # ... (logic for first_day_of_target_month, last_day_of_target_month as before) ...
+
         target_month_date = today # Start from today for current month calculation
-        for _ in range(i): # Go back i months
+        
+        for _ in range(i):
             first_day_of_prev_month = target_month_date.replace(day=1) - timedelta(days=1)
             target_month_date = first_day_of_prev_month
-        first_day_of_target_month = target_month_date.replace(day=1)
-
-        if first_day_of_target_month.month == 12:
-            last_day_of_target_month = first_day_of_target_month.replace(year=first_day_of_target_month.year + 1, month=1, day=1) - timedelta(days=1)
-        else:
-            last_day_of_target_month = first_day_of_target_month.replace(month=first_day_of_target_month.month + 1, day=1) - timedelta(days=1)
+        start_of_target_month = target_month_date.replace(day=1)
+        next_m = start_of_target_month.replace(day=28) + timedelta(days=4)
+        end_of_target_month = next_m - timedelta(days=next_m.day)
         
-        start_of_target_month_dt = timezone.make_aware(timezone.datetime.combine(first_day_of_target_month, timezone.datetime.min.time()))
-        end_of_target_month_dt = timezone.make_aware(timezone.datetime.combine(last_day_of_target_month, timezone.datetime.max.time()))
-
-        tx_in_month = SalesTransaction.objects.filter(user=request.user, transaction_time__gte=start_of_target_month_dt, transaction_time__lte=end_of_target_month_dt)
+        start_dt = timezone.make_aware(timezone.datetime.combine(start_of_target_month, timezone.datetime.min.time()))
+        end_dt = timezone.make_aware(timezone.datetime.combine(end_of_target_month, timezone.datetime.max.time()))
+        
+        tx_in_month = SalesTransaction.objects.filter(user=request.user, transaction_time__range=(start_dt, end_dt))
         monthly_revenue = sum(tx.grand_total_revenue for tx in tx_in_month) or Decimal('0.00')
-        monthly_labels.append(first_day_of_target_month.strftime("%b %Y"))
+        
+        monthly_labels.append(start_of_target_month.strftime("%b %Y"))
         monthly_revenue_data.append(float(monthly_revenue))
         
     context = {

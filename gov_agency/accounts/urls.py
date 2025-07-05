@@ -24,4 +24,9 @@ urlpatterns = [
     path('custom-accounts/update/<int:pk>/', views.update_custom_transaction_view, name='update_custom_transaction'),
     path('custom-accounts/delete/<int:pk>/', views.delete_custom_transaction_view, name='delete_custom_transaction'),
     path('custom-accounts/ajax/get-data/<int:pk>/', views.ajax_get_custom_transaction_data, name='ajax_get_custom_transaction_data'),
+
+    # --- NEW URLS FOR DAILY SUMMARY ---
+    path('summary/', views.daily_summary_list_view, name='daily_summary_list'),
+    path('summary/generate/', views.generate_today_summary_view, name='generate_today_summary'),
+    path('summary/delete/<int:summary_pk>/', views.delete_daily_summary_view, name='delete_daily_summary'),
 ]
