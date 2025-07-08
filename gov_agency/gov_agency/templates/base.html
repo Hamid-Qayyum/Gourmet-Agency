@@ -141,14 +141,44 @@
                         {# You can put breadcrumbs or page title here #}
                         <h1 class="text-xl font-semibold text-base-content">{% block page_title %}{% endblock %}</h1>
                     </div>
-                    <div>
+                    
+                     <!-- ================= START: MODIFIED SECTION ================= -->
+                    <div class="flex items-center gap-4">
                         {% if request.user.is_authenticated %}
-                            <span class="text-sm text-base-content mr-3">Logged in as <strong>{{ request.user.username }}</strong></span>
-                            <a href="{% url 'logout' %}" class="btn btn-sm btn-outline btn-error">Logout</a>
+                            <span class="text-sm text-base-content hidden sm:block"> <strong>{{ request.user.username }}</strong></span>
+
+                            <!-- DaisyUI Dropdown for Settings Menu -->
+                            <div class="dropdown dropdown-end">
+                                <!-- The Gear Icon Button that triggers the dropdown -->
+                                <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.438.995s.145.755.438.995l1.003.827c.48.398.587 1.03.26 1.431l-1.296 2.247a1.125 1.125 0 0 1-1.37.49l-1.217-.456c-.355-.133-.75-.072-1.075.124a6.57 6.57 0 0 1-.22.127c-.332.183-.582.495-.645.87l-.213 1.281c-.09.542-.56.94-1.11.94h-2.593c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.063-.374-.313-.686-.645.87a6.52 6.52 0 0 1-.22-.127c-.324-.196-.72-.257-1.075-.124l-1.217.456a1.125 1.125 0 0 1-1.37-.49l-1.296-2.247a1.125 1.125 0 0 1 .26-1.431l1.003-.827c.293-.24.438-.613.438-.995s-.145-.755-.438-.995l-1.003-.827a1.125 1.125 0 0 1-.26-1.431l1.296-2.247a1.125 1.125 0 0 1 1.37-.49l1.217.456c.355.133.75.072 1.075-.124a6.57 6.57 0 0 1 .22-.127c.332-.183.582-.495.645.87l.213-1.281Z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                    </svg>
+                                </div>
+                                
+                                <!-- The Dropdown Menu Content -->
+                                <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+                                    <!-- "Is Admin" Checkbox: Only shows for staff users and is disabled (informational) -->
+                                    
+                                        <li class="p-2">
+                                            <label class="label cursor-pointer p-0">
+                                                <span class="label-text font-semibold">Admin Status</span>
+                                                <input type="checkbox" class="toggle toggle-success" checked />
+                                            </label>
+                                        </li>
+                                        <div class="divider my-0"></div>
+                                    
+                                    
+                                    <!-- Logout Button -->
+                                    <li><a href="{% url 'logout' %}" class="text-error font-semibold">Logout</a></li>
+                                </ul>
+                            </div>
                         {% else %}
-                            <a href="#" class="btn btn-sm btn-primary">Login</a> {# Example Login Link #}
+                            <a href="{% url 'login' %}" class="btn btn-sm btn-primary">Login</a>
                         {% endif %}
                     </div>
+
                 </div>
             </header>
 

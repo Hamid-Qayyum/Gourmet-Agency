@@ -62,20 +62,26 @@
 
                 <div class="divider my-8"></div>
 
-                <h3 class="text-lg font-semibold mb-2">2. Confirm Final Payment Method</h3>
-                <div class="form-control w-full max-w-sm mb-4">
-                    {{ payment_form.payment_type.label_tag }}
-                    {{ payment_form.payment_type }}
-                    {% if payment_form.payment_type.errors %}
-                        <p class="text-error text-xs mt-1">{{ payment_form.payment_type.errors|join:", " }}</p>
-                    {% endif %}
-                </div>
-                
-                {% if payment_form.non_field_errors %}
-                    <div role="alert" class="alert alert-error text-sm p-3 mb-4">
-                        <div>{% for error in payment_form.non_field_errors %}{{ error }}{% endfor %}</div>
+                <h3 class="font-bold text-lg mb-4">2. Confirm Final Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ payment_form.payment_type.id_for_label }}">
+                            <span class="label-text">{{ payment_form.payment_type.label }}</span>
+                        </label>
+                        {{ payment_form.payment_type }}
+                        {% if payment_form.payment_type.errors %}<div class="text-error text-xs mt-1">{{ payment_form.payment_type.errors|join:", " }}</div>{% endif %}
                     </div>
-                {% endif %}
+                    
+                    <!-- NEW: Discount Field -->
+                    <div class="form-control w-full">
+                        <label class="label" for="{{ payment_form.total_discount_amount.id_for_label }}">
+                            <span class="label-text font-semibold">{{ payment_form.total_discount_amount.label }}</span>
+                        </label>
+                        {{ payment_form.total_discount_amount }}
+                        {% if payment_form.total_discount_amount.errors %}<div class="text-error text-xs mt-1">{{ payment_form.total_discount_amount.errors|join:", " }}</div>{% endif %}
+                    </div>
+                </div>
+                {% if payment_form.non_field_errors %}<div class="text-error text-sm mt-2">{{ payment_form.non_field_errors }}</div>{% endif %}
 
                 <div class="card-actions justify-end mt-8 space-x-3">
                     <a href="{% url 'stock:pending_deliveries' %}" class="btn btn-ghost">Cancel</a>

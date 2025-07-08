@@ -63,6 +63,9 @@ def register_user(request):
 # dashboard view .......................................................................................................
 @login_required
 def dashboard(request):
+    print("dashbord")
+    messages.success(request, "hello dashboard")
+    print("checking")
     return render(request,'stock/admin_dashboard.html')
 
 
@@ -260,76 +263,67 @@ def add_stock_to_product_detail_view(request, pk):
 
 @login_required
 def sales_processing_view(request):
+    """
+    Handles the entire multi-item sales process, including adding items to a
+    session-based cart and finalizing the transaction with an overall discount.
+    """
     # Session key for the current "cart" of sale items
     current_transaction_items_session_key = f'current_transaction_items_{request.user.id}'
     
-    # Initialize forms
+    # Initialize forms for both GET and POST requests
     add_item_form = AddItemToSaleForm(user=request.user)
-    finalize_sale_form = FinalizeSaleForm(user=request.user) # For final transaction details
+    finalize_sale_form = FinalizeSaleForm(user=request.user)
 
     if request.method == 'POST':
         action = request.POST.get('action')
 
+        # --- ACTION 1: ADD ITEM TO THE CURRENT TRANSACTION ---
         if action == 'add_item_to_transaction':
             add_item_form = AddItemToSaleForm(request.POST, user=request.user)
             if add_item_form.is_valid():
                 product_detail_batch = add_item_form.cleaned_data['product_detail_batch']
                 quantity_to_add = add_item_form.cleaned_data['quantity_to_add']
                 selling_price_item = add_item_form.cleaned_data['selling_price_per_item']
-                discount_perc = add_item_form.cleaned_data.get('discount_percentage') or Decimal('0.00')
                 current_items = request.session.get(current_transaction_items_session_key, [])
 
-                # Check if this exact product_detail_batch is already in the cart
-                item_found = False
-                for item in current_items:
-                    if item['product_detail_id'] == product_detail_batch.id:
-                        # Option: Update quantity and price if item exists
-                        # item['quantity'] = str(Decimal(item['quantity']) + quantity_to_add) # If you want to sum quantities
-                        # item['selling_price_per_item'] = str(selling_price_item) # Or update price
-                        # For simplicity, let's prevent adding duplicates for now, or replace.
-                        messages.warning(request, f"{product_detail_batch.product_base.name} (Exp: {product_detail_batch.expirey_date}) is already in the list. Remove to re-add with new quantity/price.")
-                        item_found = True
-                        break
-                
-                if not item_found:
+                # Check for duplicates
+                if any(item['product_detail_id'] == product_detail_batch.id for item in current_items):
+                    messages.warning(request, f"{product_detail_batch.product_base.name} is already in the list. Remove to re-add with new quantity/price.")
+                else:
+                    # Calculate gross subtotal for this line (no discount here)
                     individual_items_count = product_detail_batch._get_items_from_decimal(quantity_to_add)
-                    # 2. Calculate the price before discount
                     gross_subtotal = individual_items_count * selling_price_item
-                    # 3. Calculate the discount multiplier (e.g., 5% off is a 0.95 multiplier)
-                    discount_multiplier = Decimal('1.00') - (discount_perc / Decimal('100.00'))
-                    # 4. Define net_subtotal by applying the discount
-                    net_subtotal = gross_subtotal * discount_multiplier
+                    
                     current_items.append({
                         'product_detail_id': product_detail_batch.id,
                         'product_display_name': f"{product_detail_batch.product_base.name} (Exp: {product_detail_batch.expirey_date.strftime('%d-%b-%Y')})",
                         'quantity_decimal': str(quantity_to_add),
                         'selling_price_per_item': str(selling_price_item),
-                        'discount_percentage': str(discount_perc), # <-- Add discount to session
                         'cost_price_per_item': str(product_detail_batch.price_per_item),
-                        'items_per_master_unit': product_detail_batch.items_per_master_unit,
-                        'line_subtotal': str(net_subtotal.quantize(Decimal('0.01'))) # Store discounted subtotal
+                        'line_subtotal': str(gross_subtotal.quantize(Decimal('0.01'))) # Store the gross (undiscounted) subtotal
                     })
                     messages.success(request, f"Added {quantity_to_add} of {product_detail_batch.product_base.name} to transaction.")
-                else:
-                    messages.warning(request, f"{product_detail_batch.product_base.name} is already in the list. Remove to re-add with new quantity/price.")
+                
                 request.session[current_transaction_items_session_key] = current_items
-                return redirect('stock:sales')
+            return redirect('stock:sales')
 
+        # --- ACTION 2: REMOVE ITEM FROM THE CURRENT TRANSACTION ---
         elif action == 'remove_item_from_transaction':
             item_index_to_remove = request.POST.get('item_index')
             current_items = request.session.get(current_transaction_items_session_key, [])
             try:
-                item_index_to_remove = int(item_index_to_remove)
-                if 0 <= item_index_to_remove < len(current_items):
-                    current_items.pop(item_index_to_remove)
+                item_index = int(item_index_to_remove)
+                if 0 <= item_index < len(current_items):
+                    current_items.pop(item_index)
                     request.session[current_transaction_items_session_key] = current_items
-                    messages.info(request, "Item removed from current transaction.")
+                    messages.info(request, "Item removed from transaction.")
                 else:
                     messages.error(request, "Invalid item index to remove.")
             except (ValueError, TypeError):
                 messages.error(request, "Error removing item.")
             return redirect('stock:sales')
 
+        # --- ACTION 3: FINALIZE THE ENTIRE TRANSACTION ---
         elif action == 'finalize_transaction':
             current_items = request.session.get(current_transaction_items_session_key, [])
             if not current_items:
@@ -340,94 +334,58 @@ def sales_processing_view(request):
             if finalize_sale_form.is_valid():
                 try:
                     with transaction.atomic():
-                        # Create SalesTransaction header
-                        customer_shop_instance = finalize_sale_form.cleaned_data.get('customer_shop')
-                        customer_name_manual_input = finalize_sale_form.cleaned_data.get('customer_name_manual')
+                        # Create the SalesTransaction header instance from the form
+                        # This automatically includes the new 'total_discount_amount'
+                        sales_transaction_header = finalize_sale_form.save(commit=False)
+                        sales_transaction_header.user = request.user
+                        sales_transaction_header.status = 'PENDING_DELIVERY' if sales_transaction_header.needs_vehicle else 'COMPLETED'
+                        sales_transaction_header.save() # First save to get a primary key
 
-                        sales_transaction_header = SalesTransaction.objects.create(
-                            user=request.user,
-                            customer_shop=finalize_sale_form.cleaned_data.get('customer_shop'),
-                            customer_name_manual=finalize_sale_form.cleaned_data.get('customer_name_manual'),
-                            payment_type=finalize_sale_form.cleaned_data['payment_type'],
-                            needs_vehicle=finalize_sale_form.cleaned_data.get('needs_vehicle', False),
-                            assigned_vehicle=finalize_sale_form.cleaned_data.get('assigned_vehicle') if finalize_sale_form.cleaned_data.get('needs_vehicle') else None,
-                            notes=finalize_sale_form.cleaned_data.get('notes'),
-                            status=SalesTransaction.SALE_STATUS_CHOICES[1][0] # PENDING_DELIVERY if vehicle, else COMPLETED
-                                   if finalize_sale_form.cleaned_data.get('needs_vehicle') else SalesTransaction.SALE_STATUS_CHOICES[2][0]
-                        )
-
+                        # Loop through items in session to create SalesTransactionItem objects
                         for item_data in current_items:
                             pd_batch = ProductDetail.objects.select_for_update().get(pk=item_data['product_detail_id'])
-                            stock_before_this_item_sale = pd_batch.stock # Capture before decrement
-
-                            quantity_to_sell_for_item = Decimal(item_data['quantity_decimal'])
                             
-                            if not pd_batch.decrease_stock(quantity_to_sell_for_item):
-                                raise Exception(f"Stock update failed for {pd_batch.product_base.name} (Exp: {pd_batch.expirey_date}). Transaction rolled back.")
+                            if not pd_batch.decrease_stock(Decimal(item_data['quantity_decimal'])):
+                                raise Exception(f"Stock update failed for {pd_batch}. Transaction rolled back.")
 
                             SalesTransactionItem.objects.create(
                                 transaction=sales_transaction_header,
                                 product_detail_snapshot=pd_batch,
                                 quantity_sold_decimal=Decimal(item_data['quantity_decimal']),
                                 selling_price_per_item=Decimal(item_data['selling_price_per_item']),
-                                discount_percentage=Decimal(item_data.get('discount_percentage', '0.00')), # <-- Get from session
                                 cost_price_per_item_at_sale=Decimal(item_data['cost_price_per_item']),
-                                expiry_date_at_sale=pd_batch.expirey_date,
-                                items_per_master_unit_at_sale=pd_batch.items_per_master_unit
                             )
                         
-                        # After all items are saved, the grand_total_revenue is updated.
-                        # We need to refresh the instance to get the latest calculated total.
+                        # After creating all items, call the method to calculate final totals
+                        sales_transaction_header.update_grand_totals()
                         sales_transaction_header.refresh_from_db()
-                        
-                        # Create a ledger entry if the payment type is CREDIT, regardless of customer type.
+
+                        # Create a ledger entry if the payment type is CREDIT
                         if sales_transaction_header.payment_type == 'CREDIT':
-                            # Determine which customer identifier to use for the ledger
-                            if customer_shop_instance:
-                                # If a registered shop was selected, link to it
-                                ShopFinancialTransaction.objects.create(
-                                    shop=customer_shop_instance,
-                                    user=request.user,
-                                    source_sale=sales_transaction_header,
-                                    transaction_type='CREDIT_SALE',
-                                    debit_amount=sales_transaction_header.grand_total_revenue,
-                                    notes=f"Credit from Sale Transaction #{sales_transaction_header.pk}"
-                                )
-                            elif customer_name_manual_input:
-                                # If a manual name was used, create a ledger entry without a shop link
-                                # and store the name in the snapshot field.
-                                ShopFinancialTransaction.objects.create(
-                                    shop=None, # Explicitly no shop
-                                    customer_name_snapshot=customer_name_manual_input,
-                                    user=request.user,
-                                    source_sale=sales_transaction_header,
-                                    transaction_type='CREDIT_SALE',
-                                    debit_amount=sales_transaction_header.grand_total_revenue,
-                                    notes=f"Credit from Sale Transaction #{sales_transaction_header.pk}"
-                                )
+                            ShopFinancialTransaction.objects.create(
+                                shop=sales_transaction_header.customer_shop,
+                                customer_name_snapshot=sales_transaction_header.customer_name_manual,
+                                user=request.user,
+                                source_sale=sales_transaction_header,
+                                transaction_type='CREDIT_SALE',
+                                debit_amount=sales_transaction_header.grand_total_revenue, # This is now the final, discounted amount
+                                notes=f"Credit from Sale Transaction #{sales_transaction_header.pk}"
+                            )
                         
-                        # SalesTransactionItem save will trigger SalesTransaction.update_grand_totals
-                        messages.success(request, f"Transaction #{sales_transaction_header.pk} completed    !")
+                        messages.success(request, f"Transaction #{sales_transaction_header.pk} completed successfully!")
                         del request.session[current_transaction_items_session_key] # Clear the cart
-                        # Redirect to receipt or back to sales page
-                        return redirect('stock:all_transactions_list') 
+                        return redirect('stock:sales')
 
                 except ProductDetail.DoesNotExist:
-                    messages.error(request, "Error: A product in the transaction no longer exists. Transaction cancelled.")
+                    messages.error(request, "Error: A product in the transaction could not be found. Transaction cancelled.")
                 except Exception as e:
-                    messages.error(request, f"Error completing transaction: {str(e)}")
-                # If any error, form will be re-rendered with errors, cart items still in session
-            else: # finalize_sale_form is not valid
-                messages.error(request, "Please correct the details for completing the sale.")
-                # Errors in finalize_sale_form will be shown. Cart items remain in session.
-                # Need to pass add_item_form again if it was cleared
-                add_item_form = AddItemToSaleForm(user=request.user)
+                    messages.error(request, f"An unexpected error occurred: {str(e)}")
+            else:
+                messages.error(request, "Please correct the errors in the final sale details below.")
 
-
-    # For GET request, load current transaction items from session
+    # --- For GET requests or if a POST fails validation ---
     current_transaction_items = request.session.get(current_transaction_items_session_key, [])
     current_transaction_subtotal = sum(Decimal(item['line_subtotal']) for item in current_transaction_items)
-
 
     context = {
         'add_item_form': add_item_form,
@@ -435,9 +393,7 @@ def sales_processing_view(request):
         'current_transaction_items': current_transaction_items,
         'current_transaction_subtotal': current_transaction_subtotal,
     }
-    return render(request, 'stock/sales_multiem.html', context) # New template name
-
-
+    return render(request, 'stock/sales_multiem.html', context)
 
 
 
@@ -594,7 +550,7 @@ def export_sales_to_excel(request):
     columns = [
         "Tx ID", "Date", "Time", "Customer", "Payment", "Status",
         "Total Revenue", "Total Profit", "Notes",  # Transaction-level info
-        "Product Name", "Price Per Unit", "Quantity Sold", "Returned", "Discount %", "Unit", # Item-level info
+        "Product Name", "Price Per Unit", "Quantity Sold", "Returned", "Discount", "Unit", # Item-level info
     ]
     ws.append(columns)
 
@@ -638,10 +594,10 @@ def export_sales_to_excel(request):
                     tx.calculated_grand_profit,
                     tx.notes,
                     item.product_detail_snapshot.product_base.name,
-                    item.selling_price_per_item, # Use number format
+                    item.selling_price_per_item,
                     item.quantity_sold_decimal,
                     item.returned_quantity_decimal,
-                    f'{item.discount_percentage}%', # CORRECTED: Show item-specific discount
+                    f'{tx.total_discount_amount}', 
                     f'{item.product_detail_snapshot.quantity_in_packing} {item.product_detail_snapshot.unit_of_measure}',
                 ]
                 ws.append(row)
@@ -715,9 +671,13 @@ def pending_deliveries_view(request):
 
 
 
-
 @login_required
 def process_delivery_return_view(request, sale_pk):
+    """
+    Handles the processing of returns and final settlement for a sales transaction.
+    This view correctly updates returned quantities, stock, discount amount, totals,
+    status, and financial ledger entries in the correct logical order.
+    """
     # Get the single source-of-truth object for this transaction at the start.
     sales_transaction = get_object_or_404(
         SalesTransaction, 
@@ -737,82 +697,87 @@ def process_delivery_return_view(request, sale_pk):
         if return_formset.is_valid() and payment_form.is_valid():
             try:
                 with transaction.atomic():
-                    # --- Step 1: Process and save item returns and adjust stock ---
-                    # We will loop and save each item individually to ensure stock is updated correctly.
-                    # get_object_or_404 ensures we are only working on items for this transaction.
+                    # --- Step 1: Update Item Returns and Adjust Stock ---
+                    # Loop through each item form. If it has changed, update the returned quantity
+                    # and adjust the stock of the corresponding ProductDetail.
                     for form in return_formset:
                         if form.has_changed() and 'returned_quantity_decimal' in form.changed_data:
-                            item_pk = form.instance.pk
-                            item_instance = get_object_or_404(SalesTransactionItem, pk=item_pk, transaction=sales_transaction)
+                            # Use form.save(commit=False) to get the instance with the new data without saving yet.
+                            item_instance = form.save(commit=False)
                             
-                            original_returned_quantity = item_instance.returned_quantity_decimal
-                            new_returned_quantity = form.cleaned_data['returned_quantity_decimal']
-                            
-                            stock_change_difference = new_returned_quantity - original_returned_quantity
+                            # Fetch the original state from the DB to calculate the stock change
+                            original_item = SalesTransactionItem.objects.get(pk=item_instance.pk)
+                            stock_change_difference = item_instance.returned_quantity_decimal - original_item.returned_quantity_decimal
                             
                             if stock_change_difference != Decimal('0.0'):
                                 product_detail_to_update = item_instance.product_detail_snapshot
-                                if stock_change_difference > 0:
-                                    if not product_detail_to_update.increase_stock(stock_change_difference):
-                                        raise Exception(f"Failed to increase stock for {product_detail_to_update.product_base.name}.")
-                                else:
-                                    if not product_detail_to_update.decrease_stock(abs(stock_change_difference)):
-                                        raise Exception(f"Failed to decrease stock for {product_detail_to_update.product_base.name}.")
+                                if stock_change_difference > 0: # More items returned
+                                    product_detail_to_update.increase_stock(stock_change_difference)
+                                else: # A return was undone (less common)
+                                    product_detail_to_update.decrease_stock(abs(stock_change_difference))
                             
-                            # Save the new returned quantity to the item
-                            item_instance.returned_quantity_decimal = new_returned_quantity
-                            item_instance.save(update_fields=['returned_quantity_decimal'])
+                            # Save the item, but tell it NOT to update the parent transaction yet.
+                            # This prevents premature calculations.
+                            item_instance.save(update_parent=False)
 
-                            # item_instance.quantity_sold_decimal = item_instance.quantity_sold_decimal - new_returned_quantity
-                            # item_instance.save(update_fields=['quantity_sold_decimal'])
-
-                    # --- Step 2: Recalculate and Save Grand Totals for the Transaction ---
-                    # Now that all items are updated, explicitly tell the parent transaction to update itself.
-                    # We call the method which will calculate and save.
-                    sales_transaction.update_grand_totals()
-
-                    # --- Step 3: Update the Payment Type and Status ---
-                    # We re-fetch the transaction object to ensure we have the latest totals before proceeding.
-                    final_transaction_state = SalesTransaction.objects.get(pk=sale_pk)
-
-                    # Get the new payment type from the validated form
+                    # --- Step 2: Apply Final Form Data to the Transaction Object ---
+                    # Get the final payment type and the NEW discount amount from the form.
                     new_payment_type = payment_form.cleaned_data['payment_type']
-                    final_transaction_state.payment_type = new_payment_type
+                    new_discount_amount = payment_form.cleaned_data['total_discount_amount']
+
+                    # Apply these new values directly to our main transaction object in memory.
+                    sales_transaction.payment_type = new_payment_type
+                    sales_transaction.total_discount_amount = new_discount_amount
                     
-                    # Determine the new status based on the final item states
-                    final_items = final_transaction_state.items.all()
+                    # --- Step 3: Trigger a SINGLE, FINAL Recalculation ---
+                    # Now, call update_grand_totals. It will use the correct item returns (from Step 1)
+                    # and the new discount amount (from Step 2) to perform a perfect calculation.
+                    # This method saves the new grand_total_revenue and grand_total_cost.
+                    sales_transaction.update_grand_totals()
+                    
+                    # --- Step 4: Update the Transaction Status ---
+                    # We must refresh the object from the DB to get the freshly calculated totals.
+                    sales_transaction.refresh_from_db()
+
+                    final_items = sales_transaction.items.all()
                     total_dispatched = sum(item.dispatched_individual_items_count for item in final_items)
                     total_returned = sum(item.returned_individual_items_count for item in final_items)
 
                     if total_returned == 0:
-                        final_transaction_state.status = 'COMPLETED'
+                        sales_transaction.status = 'COMPLETED'
                     elif total_returned >= total_dispatched:
-                        final_transaction_state.status = 'FULLY_RETURNED'
+                        sales_transaction.status = 'FULLY_RETURNED'
                     else:
-                        final_transaction_state.status = 'PARTIALLY_RETURNED'
+                        sales_transaction.status = 'PARTIALLY_RETURNED'
                     
-                    # Save the final status and payment type in one operation.
-                    final_transaction_state.save(update_fields=['status', 'payment_type'])
+                    # --- Step 5: Perform the FINAL save to the database ---
+                    # This saves the status and permanently stores the new payment type and discount.
+                    sales_transaction.save(
+                        update_fields=[
+                            'status', 
+                            'payment_type', 
+                            'total_discount_amount'
+                        ]
+                    )
 
-                    # --- Step 4: Update Financial Ledger Entry ---
-                    # Use the final transaction state for all ledger operations
-                    existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=final_transaction_state).first()
-                    final_revenue = final_transaction_state.grand_total_revenue
-                    
-                    if final_transaction_state.payment_type == 'CREDIT' and final_transaction_state.customer_shop:
+                    # --- Step 6: Update Financial Ledger Entry ---
+                    # This logic will now work correctly as it uses the final, correct transaction state.
+                    existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=sales_transaction).first()
+                    if sales_transaction.payment_type == 'CREDIT' and sales_transaction.customer_shop:
+                        final_revenue = sales_transaction.grand_total_revenue
                         if existing_credit_entry:
                             existing_credit_entry.debit_amount = final_revenue
                             existing_credit_entry.save(update_fields=['debit_amount'])
                         else:
                             ShopFinancialTransaction.objects.create(
-                                shop=final_transaction_state.customer_shop, user=request.user,
-                                source_sale=final_transaction_state, transaction_type='CREDIT_SALE',
+                                shop=sales_transaction.customer_shop, user=request.user,
+                                source_sale=sales_transaction, transaction_type='CREDIT_SALE',
                                 debit_amount=final_revenue
                             )
-                    elif final_transaction_state.payment_type != 'CREDIT' and existing_credit_entry:
+                    elif sales_transaction.payment_type != 'CREDIT' and existing_credit_entry:
                         existing_credit_entry.delete()
 
-                    messages.success(request, f"Delivery for Transaction #{final_transaction_state.pk} processed. Status: '{final_transaction_state.get_status_display()}'.")
+                    messages.success(request, f"Delivery for Transaction #{sales_transaction.pk} processed successfully.")
                     return redirect('stock:pending_deliveries')
 
             except Exception as e:
@@ -829,8 +794,8 @@ def process_delivery_return_view(request, sale_pk):
         'return_formset': return_formset,
         'payment_form': payment_form,
         'transaction': sales_transaction
-                }
-    return render(request, 'stock/process_delivery_return.html', context)
+    }
+    return render(request, 'stock/process_delivery_return.html', context)  
 
 
 

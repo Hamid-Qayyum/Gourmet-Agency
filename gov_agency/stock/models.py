@@ -194,7 +194,12 @@ class SalesTransaction(models.Model):
         blank=True, # Only if needs_vehicle is True
         related_name='assigned_sales_transactions'
     )
-    
+    total_discount_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        help_text="A fixed monetary discount amount applied to the entire transaction's subtotal."
+    )
     # Overall financial summary for this entire transaction
     # These will be calculated by summing up the totals from SalesTransactionItem records.
     grand_total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
@@ -206,36 +211,38 @@ class SalesTransaction(models.Model):
         customer_display = self.customer_shop.name if self.customer_shop else self.customer_name_manual or "Walk-in Customer"
         return f"Transaction #{self.pk} for {customer_display} on {self.transaction_time.strftime('%Y-%m-%d')}"
 
-    def update_grand_totals(self):
+    def update_grand_totals(self, new_discount_amount=None):
         """
-        Recalculates grand totals based on all its items.
-        This works correctly as it relies on item.total_item_final_revenue which now includes discounts.
+        Calculates grand totals. If 'new_discount_amount' is provided,
+        it uses that for the calculation before saving.
         """
+        # If a new discount is passed, update the instance's value first.
+        if new_discount_amount is not None:
+            self.total_discount_amount = new_discount_amount
+
         items_queryset = self.items.all()
         
-        # Using list comprehension with a fallback for potential None values.
-        new_grand_total_revenue = sum([item.total_item_final_revenue for item in items_queryset]) or Decimal('0.00')
-        new_grand_total_cost = sum([item.total_item_final_cost for item in items_queryset]) or Decimal('0.00')
+        gross_subtotal = sum(item.gross_line_subtotal for item in items_queryset) or Decimal('0.00')
         
-        changed = False
-        if self.grand_total_revenue != new_grand_total_revenue:
-            self.grand_total_revenue = new_grand_total_revenue
-            changed = True
-        if self.grand_total_cost != new_grand_total_cost:
-            self.grand_total_cost = new_grand_total_cost
-            changed = True
+        # This will now use either the existing discount or the new one we just set.
+        self.grand_total_revenue = gross_subtotal - (self.total_discount_amount or Decimal('0.00'))
         
-        if changed:
-            self.save(update_fields=['grand_total_revenue', 'grand_total_cost'])
+        self.grand_total_cost = sum(item.total_item_cost for item in items_queryset) or Decimal('0.00')
+        
+        # Save all relevant fields at once.
+        self.save(
+            update_fields=[
+                'grand_total_revenue', 
+                'grand_total_cost',
+                'total_discount_amount'
+            ]
+        )
 
-    @property
-    def total_discount_amount(self):
-        """Calculates the total monetary discount for the entire transaction based on final sold items."""
-        return sum(item.total_discount_amount for item in self.items.all()) or Decimal('0.00')
 
     @property
     def calculated_grand_profit(self):
         return self.grand_total_revenue - self.grand_total_cost
+
 
     class Meta:
         ordering = ['-transaction_time']
@@ -247,50 +254,18 @@ class SalesTransactionItem(models.Model):
     """
     Represents one line item (a specific product batch sold) within a SalesTransaction.
     """
-    transaction = models.ForeignKey(
-        SalesTransaction, 
-        on_delete=models.CASCADE, # If the transaction header is deleted, its items are also deleted
-        related_name="items" # How to get items from a SalesTransaction object (e.g., my_transaction.items.all())
-    )
-    # Which specific product batch was sold for this line item
-    product_detail_snapshot = models.ForeignKey(
-        'ProductDetail', 
-        on_delete=models.PROTECT, # Prevent deleting ProductDetail if it's part of a sold item.
-                                  # You might need a way to "deactivate" product details instead.
-        help_text="The specific product batch (product name, expiry, etc.) sold."
-    )
-    
-    # Quantity of THIS product batch sold, in your "master_unit.item" decimal format (e.g., 1.1)
-    quantity_sold_decimal = models.DecimalField(
-        max_digits=10, decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))] 
-    )
-    
-    # Prices PER INDIVIDUAL ITEM for this line item, snapshotted at the time of sale
+    transaction = models.ForeignKey(SalesTransaction, on_delete=models.CASCADE, related_name="items")
+    product_detail_snapshot = models.ForeignKey('ProductDetail', on_delete=models.PROTECT, help_text="The specific product batch sold.")
+    quantity_sold_decimal = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
     selling_price_per_item = models.DecimalField(max_digits=10, decimal_places=2)
-
-    discount_percentage = models.DecimalField(
-        max_digits=5, decimal_places=2, default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))],
-        help_text="Discount percentage for this item (e.g., 5 for 5%)."
-    )
     cost_price_per_item_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
-
-    # Snapshot details from ProductDetail for this line item (important for historical accuracy)
     expiry_date_at_sale = models.DateField()
-    items_per_master_unit_at_sale = models.PositiveIntegerField() # e.g., 6 items per carton
-
-    # Calculated totals for THIS line item (based on dispatched quantity)
+    items_per_master_unit_at_sale = models.PositiveIntegerField()
     total_item_dispatched_revenue = models.DecimalField(max_digits=12, decimal_places=2)
     total_item_dispatched_cost = models.DecimalField(max_digits=12, decimal_places=2)
-    
-    # Quantity returned FOR THIS LINE ITEM (in your "master_unit.item" decimal format)
-    returned_quantity_decimal = models.DecimalField(
-        max_digits=10, decimal_places=2,
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00'))]
-    )
-    
+    returned_quantity_decimal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
+
+    # --- HELPER METHODS AND PROPERTIES (These are all correct) ---
     def _get_individual_items_from_decimal(self, decimal_qty: Decimal, items_per_mu: int) -> int:
         if decimal_qty is None or items_per_mu is None or items_per_mu <= 0: return 0
         full_units = int(decimal_qty)
@@ -302,88 +277,71 @@ class SalesTransactionItem(models.Model):
         return self._get_individual_items_from_decimal(self.quantity_sold_decimal, self.items_per_master_unit_at_sale)
 
     @property
-    def returned_individual_items_count(self) -> int:
-        return self._get_individual_items_from_decimal(self.returned_quantity_decimal, self.items_per_master_unit_at_sale)
-
-    @property
     def actual_sold_individual_items_count(self) -> int:
+        """Calculates the final number of items sold after returns."""
         return self.dispatched_individual_items_count - self.returned_individual_items_count
-
+    
     @property
-    def total_item_final_revenue(self) -> Decimal:
-        """Final revenue for this line item after considering returns AND discount."""
-        gross_revenue = Decimal(self.actual_sold_individual_items_count) * self.selling_price_per_item
-        discount_multiplier = Decimal('1.00') - (self.discount_percentage / Decimal('100.00'))
-        return (gross_revenue * discount_multiplier).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
-
+    def gross_line_subtotal(self) -> Decimal:
+        """
+        The total price for the items ACTUALLY SOLD in this line item,
+        BEFORE any overall transaction discount.
+        """
+        # USE THE CORRECT COUNT:
+        items_count = self.actual_sold_individual_items_count 
+        return (Decimal(items_count) * self.selling_price_per_item).quantize(Decimal('0.01'))
+    
     @property
-    def total_item_final_cost(self) -> Decimal:
-        """Final cost for this line item after considering returns."""
-        return (Decimal(self.actual_sold_individual_items_count) * self.cost_price_per_item_at_sale).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
-        
+    def total_item_cost(self) -> Decimal:
+        """The total cost for the items ACTUALLY SOLD in this line item."""
+        items_count = self.actual_sold_individual_items_count
+        return (Decimal(items_count) * self.cost_price_per_item_at_sale).quantize(Decimal('0.01'))
+    
     @property
-    def line_item_profit(self) -> Decimal:
-        """Profit for this line item after considering returns and discount."""
-        return self.total_item_final_revenue - self.total_item_final_cost
-
-    @property
-    def total_discount_amount(self) -> Decimal:
-        """The total monetary value of the discount for the items finally sold."""
-        gross_revenue = Decimal(self.actual_sold_individual_items_count) * self.selling_price_per_item
-        discount_amount = gross_revenue * (self.discount_percentage / Decimal('100.00'))
-        return discount_amount.quantize(Decimal('0.01'), rounding=ROUND_DOWN)
-
-
-
-    def save(self, *args, **kwargs):
-
-        update_parent = False
-        if self.pk is None: # This is a new item being created
-            update_parent = True
-        else:
-            # This is an existing item. Fetch its original state from the DB.
-            original_instance = SalesTransactionItem.objects.get(pk=self.pk)
-            # Check if the fields that impact financial totals have changed.
-            if (original_instance.returned_quantity_decimal != self.returned_quantity_decimal or
-                original_instance.quantity_sold_decimal != self.quantity_sold_decimal or
-                original_instance.selling_price_per_item != self.selling_price_per_item):
-                update_parent = True
-                
-        # Populate snapshot fields if it's a new item and product_detail_snapshot is set
+    def returned_individual_items_count(self) -> int:
+        """Calculates the total number of individual items that were returned."""
+        return self._get_individual_items_from_decimal(
+            self.returned_quantity_decimal, 
+            self.items_per_master_unit_at_sale
+        )
+    
+    def save(self, *args, update_parent=True, **kwargs):
+        """
+        Calculates and saves the gross totals for this item.
+        The 'update_parent' flag gives the view control over when to
+        trigger the parent transaction's update_grand_totals method.
+        """
+        # (The logic for populating snapshots and calculating totals is the same)
         if not self.pk and self.product_detail_snapshot:
-            self.expiry_date_at_sale = self.product_detail_snapshot.expirey_date
+            self.expiry_date_at_sale = self.product_detail_snapshot.expirey_date 
             self.items_per_master_unit_at_sale = self.product_detail_snapshot.items_per_master_unit
-            # cost_price_per_item_at_sale should be set from ProductDetail when item is added to sale (in view/form)
-            # selling_price_per_item should be set from user input when item is added to sale (in view/form)
-
         
-        
-        # Calculate totals based on dispatched quantity for this line item, including discount
         dispatched_items_count = self._get_individual_items_from_decimal(
             self.quantity_sold_decimal or Decimal('0.00'),
-            self.items_per_master_unit_at_sale or (self.product_detail_snapshot.items_per_master_unit if self.product_detail_snapshot else 0)
+            self.items_per_master_unit_at_sale
         )
         
-        gross_dispatched_revenue = dispatched_items_count * (self.selling_price_per_item or Decimal('0.0'))
-        discount_multiplier = Decimal('1.00') - ((self.discount_percentage or Decimal('0.0')) / Decimal('100.00'))
+        self.total_item_dispatched_revenue = (
+            dispatched_items_count * (self.selling_price_per_item or Decimal('0.0'))
+        ).quantize(Decimal('0.01'))
         
-        # total_item_dispatched_revenue is now the NET revenue after discount
-        self.total_item_dispatched_revenue = (gross_dispatched_revenue * discount_multiplier).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
-        self.total_item_dispatched_cost = (dispatched_items_count * (self.cost_price_per_item_at_sale or Decimal('0.0'))).quantize(Decimal('0.01'), rounding=ROUND_DOWN)
+        self.total_item_dispatched_cost = (
+            dispatched_items_count * (self.cost_price_per_item_at_sale or Decimal('0.0'))
+        ).quantize(Decimal('0.01'))
+        
         super().save(*args, **kwargs)
 
-        # After saving this item, update the parent SalesTransaction's totals if needed
+        # Only update the parent if the flag is True
         if self.transaction and update_parent:
             self.transaction.update_grand_totals()
+
+
 
     def __str__(self):
         return f"{self.quantity_sold_decimal} of {self.product_detail_snapshot.product_base.name} in Transaction #{self.transaction_id}"
 
     class Meta:
-        # You might want to prevent adding the exact same product_detail_snapshot 
-        # twice in the same transaction, preferring to update the quantity on the existing line.
-        # unique_together = [['transaction', 'product_detail_snapshot']]
-        ordering = ['pk'] # Usually items are ordered by addition
+        ordering = ['pk']
         verbose_name = "Sales Transaction Item"
         verbose_name_plural = "Sales Transaction Items"
 

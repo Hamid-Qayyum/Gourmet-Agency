@@ -165,7 +165,7 @@ class DailySummary(models.Model):
     # --- REPORTING METRICS (Value of business done) ---
     total_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     total_profit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
-    credit_sales_today = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Value of ONLY credit sales made today.")
+    total_debit_today = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Value of ONLY credit sales made today.")
     online_sales_today = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
 
     # --- CASH FLOW METRICS (Actual cash movement) ---

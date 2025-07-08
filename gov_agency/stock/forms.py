@@ -204,23 +204,13 @@ class AddItemToSaleForm(forms.Form):
         label="Quantity to Add (e.g., 1.01 for 1 Carton + 1 Item)",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
-        initial=Decimal('0.00'),
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.01'})
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.01','placeholder': '1.01'})
     )
     selling_price_per_item = forms.DecimalField(
         label="Selling Price per INDIVIDUAL Item for this batch",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_selling_price', 'step': '0.01'})
-    )
-
-    discount_percentage = forms.DecimalField(
-        label="Discount (%)",
-        max_digits=5, decimal_places=2,
-        required=False, # It can be empty, defaulting to 0 in the view
-        initial=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('0.00')), MaxValueValidator(Decimal('100.00'))],
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_discount', 'step': '0.1', 'placeholder': 'e.g., 5 for 5%'})
+        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_selling_price', 'step': '0.01','placeholder': 'Price for Indivisual Item'})
     )
 
     def __init__(self, *args, **kwargs):
@@ -284,8 +274,9 @@ class AddItemToSaleForm(forms.Form):
         return cleaned_data
 
 
-class FinalizeSaleForm(forms.Form):
+class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
     """Form for final details when completing a sale with multiple items."""
+    # Your custom field definitions for widgets and querysets are still used, which is correct.
     customer_shop = forms.ModelChoiceField(
         queryset=Shop.objects.none(), required=False, label="Select Registered Shop (Optional)",
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
@@ -302,22 +293,49 @@ class FinalizeSaleForm(forms.Form):
         required=False, label="Assign Vehicle for Delivery?",
         widget=forms.CheckboxInput(attrs={'class': 'checkbox checkbox-primary', 'id': 'finalize_sale_needs_vehicle'})
     )
+    total_discount_amount = forms.DecimalField(
+        label="Discount Amount (e.g., 50.00)",
+        required=False,
+        min_value=0,
+        widget=forms.NumberInput(attrs={
+            'class': 'input input-bordered w-full text-right', 
+            'placeholder': '0.00'
+        })
+    )
     assigned_vehicle = forms.ModelChoiceField(
         queryset=Vehicle.objects.none(), required=False, label="Assign Vehicle",
-        widget=forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'finalize_sale_assigned_vehicle'})
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
     )
     notes = forms.CharField(widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full h-20', 'placeholder': 'Optional notes for the entire sale...'}), required=False)
 
+    # --- ADD THIS META CLASS ---
+    # This class tells the ModelForm which model it's connected to and which fields to use.
+    class Meta:
+        model = SalesTransaction
+        fields = [
+            'customer_shop', 
+            'customer_name_manual',
+            'payment_type', 
+            'needs_vehicle', 
+            'assigned_vehicle',
+            'notes',
+            'total_discount_amount' # Include the discount field
+        ]
 
+    # Your __init__ and clean methods are perfectly fine and should remain unchanged.
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if user:
-            self.fields['customer_shop'].queryset = Shop.objects.filter(user=user).order_by('name') # Or global if applicable
+            self.fields['customer_shop'].queryset = Shop.objects.filter(user=user).order_by('name')
             self.fields['assigned_vehicle'].queryset = Vehicle.objects.filter(user=user, is_active=True).order_by('vehicle_number')
         self.fields['customer_shop'].empty_label = "--- Select Registered Shop ---"
         self.fields['assigned_vehicle'].empty_label = "--- Select Vehicle (If Needed) ---"
 
+    def clean_total_discount_amount(self):
+        discount = self.cleaned_data.get('total_discount_amount')
+        return discount or Decimal('0.00')
+    
     def clean(self):
         cleaned_data = super().clean()
         customer_shop = cleaned_data.get('customer_shop')
@@ -401,12 +419,18 @@ class UpdatePaymentTypeForm(forms.ModelForm):
     """
     class Meta:
         model = SalesTransaction
-        fields = ['payment_type']
+        fields = ['payment_type', 'total_discount_amount']
         widgets = {
-            'payment_type': forms.Select(attrs={'class': 'select select-bordered w-full'})
+            'payment_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
+            'total_discount_amount': forms.NumberInput(attrs={
+                'class': 'input input-bordered w-full',
+                'step': '0.01'
+            })
         }
         labels = {
-            'payment_type': 'Confirm or Change Payment Type'
+            'payment_type': 'Confirm or Change Payment Type',
+            'total_discount_amount': 'Update Discount Amount (Overall)'
+
         }
 
 

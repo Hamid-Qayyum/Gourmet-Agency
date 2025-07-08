@@ -494,8 +494,7 @@ def daily_summary_list_view(request):
 def generate_today_summary_view(request):
     if request.method == 'POST':
         today = timezone.localdate()
-
-        # --- GATHER DATA ---
+        # --- GATHER DATA (This part is unchanged) ---
         sales_today = SalesTransaction.objects.filter(user=request.user, transaction_time__date=today)
         expenses_today = Expense.objects.filter(user=request.user, expense_date__date=today)
         shop_financial_entries_today = ShopFinancialTransaction.objects.filter(user=request.user, transaction_date__date=today)
@@ -505,20 +504,25 @@ def generate_today_summary_view(request):
         total_revenue = sales_today.aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         total_profit = sum(sale.calculated_grand_profit for sale in sales_today) or Decimal('0.00')
         total_expense = expenses_today.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        credit_sales_today = sales_today.filter(payment_type='CREDIT').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         online_sales_today = sales_today.filter(payment_type='ONLINE').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         
+        # --- NEW CALCULATION: Total Debits for Today ---
+        # Get all debit amounts from both ledger models for today
+        debit_from_shops = shop_financial_entries_today.aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
+        debit_from_custom = custom_account_entries_today.aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
+        print(f'1st ....{debit_from_shops}')
+        print(f'2nd......{debit_from_custom}')
+        total_debit_today = debit_from_shops + debit_from_custom
+        print(f'3rd......{total_debit_today}')
+        # Cash received calculation is unchanged
         cash_from_shops = sum(entry.credit_amount for entry in shop_financial_entries_today if entry.transaction_type == 'CASH_RECEIPT')
         cash_from_custom_accounts = custom_account_entries_today.aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
         total_cash_received = cash_from_shops + cash_from_custom_accounts
         
-        # --- CALCULATE THE TWO FINAL NET VALUES ---
-        
-        # 1. Net Physical Cash: Only includes 'CASH' sales.
+        # --- FINAL NET CALCULATIONS (These formulas are already correct) ---
         cash_from_cash_sales = sales_today.filter(payment_type='CASH').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         net_physical_cash = (cash_from_cash_sales + total_cash_received) - total_expense
         
-        # 2. Net Total Settlement: Includes both 'CASH' and 'ONLINE' sales.
         cash_from_direct_sales = sales_today.filter(payment_type__in=['CASH', 'ONLINE']).aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         net_total_settlement = (cash_from_direct_sales + total_cash_received) - total_expense
         
@@ -529,12 +533,12 @@ def generate_today_summary_view(request):
             defaults={
                 'total_revenue': total_revenue,
                 'total_profit': total_profit,
-                'credit_sales_today': credit_sales_today,
+                'total_debit_today': total_debit_today, # <-- Save the new value
                 'online_sales_today': online_sales_today,
                 'total_expense': total_expense,
                 'total_cash_received': total_cash_received,
-                'net_physical_cash': net_physical_cash,       # Save new value
-                'net_total_settlement': net_total_settlement, # Save new value
+                'net_physical_cash': net_physical_cash,
+                'net_total_settlement': net_total_settlement,
             }
         )
         
