@@ -35,7 +35,8 @@ urlpatterns = [
    path('reports/sales/', views.sales_report_view, name='sales_report'),
 
 
-   # Recpiy view ...........
+
+   # Recipt view ...........
    path('sales/receipt/<int:sale_pk>/', views.sale_receipt_view, name='sale_receipt'),
 
 
@@ -56,9 +57,19 @@ urlpatterns = [
    path('sales/by-shop/', views.list_shops_for_sales_view, name='list_shops_for_sales'),
    path('sales/shop-history/<int:shop_pk>/', views.shop_purchase_history_view, name='shop_purchase_history'),
 
+   # sales by vehicles...........
+   path('sales/by-group/', views.sales_by_group_hub_view, name='sales_by_group_hub'),
+   path('sales/group/store/', views.sales_group_details_view, name='store_sales_details'),
+   path('sales/group/vehicle/<int:vehicle_pk>/', views.sales_group_details_view, name='vehicle_sales_details'),
+
+   # perfomance vehicle vise...........
+   path('performance/hub/', views.performance_summary_hub_view, name='performance_summary_hub'),
+   path('performance/store/', views.group_performance_summary_view, name='store_performance_summary'),
+   path('performance/vehicle/<int:vehicle_pk>/', views.group_performance_summary_view, name='vehicle_performance_summary'),
 
 
    # auth views............
    path('sign_up/', views.register_user, name='sign_up'),
    path('login/',views.user_login, name='login'),
+
 ]+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

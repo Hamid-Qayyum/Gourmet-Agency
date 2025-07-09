@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Sales by Group{% endblock %}
+{% block page_title %}Select a Group to View Sales{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+     <div class="flex justify-end mb-6 gap-2">
+        <a href="{% url 'stock:performance_summary_hub' %}" class="btn btn-sm btn-outline">← Back to Group Selection</a>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        
+        <!-- Card for Store Sales -->
+        <a href="{% url 'stock:store_sales_details' %}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow border">
+            <div class="card-body">
+                <h2 class="card-title text-primary">Store Sales</h2>
+                <p>Sales not assigned to any vehicle.</p>
+                <div class="card-actions justify-end mt-4">
+                    <div class="badge badge-success">
+                        {{ store_sales_count|intcomma }} Sale{{ store_sales_count|pluralize }}
+                    </div>
+                </div>
+            </div>
+        </a>
+
+        <!-- Cards for each Vehicle -->
+        {% for vehicle in vehicles %}
+            <a href="{% url 'stock:vehicle_sales_details' vehicle_pk=vehicle.pk %}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow border">
+                <div class="card-body">
+                    <h2 class="card-title">{{ vehicle.vehicle_number }}</h2>
+                    <p>{{ vehicle.driver_name|default:"No driver assigned" }}</p>
+                    <div class="card-actions justify-end mt-4">
+                        <div class="badge badge-success">
+                            {{ vehicle.sales_count|intcomma }} Sale{{ vehicle.sales_count|pluralize }}
+                        </div>
+                    </div>
+                </div>
+            </a>
+        {% empty %}
+            <!-- This part only shows if there are no vehicles AT ALL -->
+        {% endfor %}
+    </div>
+
+    {% if not vehicles and store_sales_count == 0 %}
+        <div class="col-span-full text-center p-8 bg-base-100 rounded-lg shadow">
+            <p class="text-base-content/70">No sales or vehicles found.</p>
+            <a href="{% url 'stock:sales' %}" class="btn btn-sm btn-primary mt-4">Create a Sale</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

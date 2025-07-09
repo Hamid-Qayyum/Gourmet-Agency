@@ -36,6 +36,14 @@
                         <div class="stat-title">Expenses</div>
                         <div class="stat-value text-sm text-warning">- Rs {{ stats_today.total_expense|floatformat:2|intcomma }}</div>
                     </div>
+                    
+                    <!-- =================== ADDED FIELD FOR TODAY =================== -->
+                    <div class="stat p-3">
+                        <div class="stat-title">Claim Loss</div>
+                        <div class="stat-value text-sm text-orange-500">- Rs {{ stats_today.stock_claim_loss|floatformat:2|intcomma }}</div>
+                    </div>
+                    <!-- ============================================================= -->
+
                     <div class="stat p-3 border-t-2 border-base-300 mt-2">
                         <div class="stat-title font-bold">NET PROFIT</div>
                         <div class="stat-value font-bold {% if stats_today.net_profit > 0 %}text-success{% elif stats_today.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_today.net_profit|floatformat:2|intcomma }}</div>
@@ -65,6 +73,14 @@
                         <div class="stat-title">Expenses</div>
                         <div class="stat-value text-sm text-warning">- Rs {{ stats_this_week.total_expense|floatformat:2|intcomma }}</div>
                     </div>
+                    
+                    <!-- =================== ADDED FIELD FOR WEEK =================== -->
+                    <div class="stat p-3">
+                        <div class="stat-title">Claim Loss</div>
+                        <div class="stat-value text-sm text-orange-500">- Rs {{ stats_this_week.stock_claim_loss|floatformat:2|intcomma }}</div>
+                    </div>
+                    <!-- ============================================================ -->
+
                     <div class="stat p-3 border-t-2 border-base-300 mt-2">
                         <div class="stat-title font-bold">NET PROFIT</div>
                         <div class="stat-value font-bold {% if stats_this_week.net_profit > 0 %}text-success{% elif stats_this_week.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_week.net_profit|floatformat:2|intcomma }}</div>
@@ -94,6 +110,14 @@
                         <div class="stat-title">Expenses</div>
                         <div class="stat-value text-sm text-warning">- Rs {{ stats_this_month.total_expense|floatformat:2|intcomma }}</div>
                     </div>
+                    
+                    <!-- =================== ADDED FIELD FOR MONTH ================== -->
+                    <div class="stat p-3">
+                        <div class="stat-title">Claim Loss</div>
+                        <div class="stat-value text-sm text-orange-500">- Rs {{ stats_this_month.stock_claim_loss|floatformat:2|intcomma }}</div>
+                    </div>
+                    <!-- ============================================================ -->
+
                     <div class="stat p-3 border-t-2 border-base-300 mt-2">
                         <div class="stat-title font-bold">NET PROFIT</div>
                         <div class="stat-value font-bold {% if stats_this_month.net_profit > 0 %}text-success{% elif stats_this_month.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_month.net_profit|floatformat:2|intcomma }}</div>
@@ -123,6 +147,14 @@
                         <div class="stat-title">Expenses</div>
                         <div class="stat-value text-sm text-warning">- Rs {{ stats_this_year.total_expense|floatformat:2|intcomma }}</div>
                     </div>
+
+                    <!-- =================== ADDED FIELD FOR YEAR =================== -->
+                    <div class="stat p-3">
+                        <div class="stat-title">Claim Loss</div>
+                        <div class="stat-value text-sm text-orange-500">- Rs {{ stats_this_year.stock_claim_loss|floatformat:2|intcomma }}</div>
+                    </div>
+                    <!-- ============================================================ -->
+
                     <div class="stat p-3 border-t-2 border-base-300 mt-2">
                         <div class="stat-title font-bold">NET PROFIT</div>
                         <div class="stat-value font-bold {% if stats_this_year.net_profit > 0 %}text-success{% elif stats_this_year.net_profit < 0 %}text-error{% endif %}">Rs {{ stats_this_year.net_profit|floatformat:2|intcomma }}</div>

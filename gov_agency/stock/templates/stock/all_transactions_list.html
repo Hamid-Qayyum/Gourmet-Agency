@@ -15,11 +15,16 @@
 {% block content %}
 <div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
     <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold">All Sales Transactions</h1>
+    <h1 class="text-2xl font-bold">{{ grouping_name|default:"All Sales Transactions" }}</h1>
+       <div class="flex gap-2"> 
+            {% if grouping_name %}
+            <a href="{% url 'stock:sales_by_group_hub' %}" class="btn btn-sm btn-outline">← Group List</a>
+            {% endif %}
         <a href="{% url 'stock:sales' %}" class="btn btn-sm btn-primary">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
             New Sale
         </a>
+        </div>
     </div>
 
         <!-- START: Date Filter Form -->

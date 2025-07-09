@@ -8,12 +8,13 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from .models import AddProduct, ProductDetail,Sale, Vehicle, Shop, SalesTransaction, SalesTransactionItem
 from accounts.models import ShopFinancialTransaction  # model from account app
+from claim.models import Claim
 from django.contrib import messages
 from django.db.models  import Q,ProtectedError
 from django.db import transaction # For atomic operations
 from django.http import JsonResponse
 from decimal import Decimal
-from django.db.models import Sum,Count, F, ExpressionWrapper, fields, DecimalField
+from django.db.models import Sum,Count,F, ExpressionWrapper, fields, DecimalField
 from django.utils import timezone
 from datetime import timedelta, date
 import json 
@@ -25,6 +26,7 @@ from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
 from expense.models import Expense
+from django.db.models.functions import TruncDate,TruncMonth
 
 
 
@@ -836,20 +838,25 @@ def sales_report_view(request):
             user=request.user, 
             expense_date__range=(start_dt, end_dt)
         )
+        claims = Claim.objects.filter(
+            user=request.user,
+            status='COMPLETED',
+            claim_date__range=(start_dt, end_dt)
+        )
+        stock_claim_loss = sum(claim.value_of_items_given for claim in claims) or Decimal('0.00')
         
         total_revenue = sum(tx.grand_total_revenue for tx in transactions)
         total_profit = sum(tx.calculated_grand_profit for tx in transactions)
         total_expense = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
                 
-        net_profit = total_profit - total_expense
-
-
+        net_profit = total_profit - total_expense - stock_claim_loss
         
         return {
             'transactions_count': transactions.count(),
             'total_grand_revenue': total_revenue,
             'total_grand_profit': total_profit,
             'total_expense': total_expense,
+            'stock_claim_loss': stock_claim_loss,
             'net_profit': net_profit,
         }
 
@@ -1170,3 +1177,138 @@ def shop_purchase_history_view(request, shop_pk):
         'shop_total_profit': shop_total_profit,
     }
     return render(request, 'stock/shop_purchase_history.html', context)
+
+
+@login_required
+def sales_by_group_hub_view(request):
+    """
+    Displays a navigation hub with cards for each vehicle and one for the "Store".
+    """
+    # Get all active vehicles and annotate them with their sales count for display.
+    vehicles = Vehicle.objects.filter(
+        user=request.user, 
+        is_active=True
+    ).annotate(
+        sales_count=Count('assigned_sales_transactions')
+    ).order_by('vehicle_number')
+
+    # Get the count of sales not assigned to any vehicle.
+    store_sales_count = SalesTransaction.objects.filter(
+        user=request.user,
+        assigned_vehicle__isnull=True
+    ).count()
+
+    context = {
+        'vehicles': vehicles,
+        'store_sales_count': store_sales_count,
+    }
+    return render(request, 'stock/sales_by_group_hub.html', context)
+
+
+
+
+
+@login_required
+def performance_summary_hub_view(request):
+    """
+    Displays a navigation hub with cards for each vehicle and one for the "Store"
+    to link to the performance summary page.
+    """
+    vehicles = Vehicle.objects.filter(user=request.user, is_active=True).order_by('vehicle_number')
+    context = {
+        'vehicles': vehicles,
+    }
+    return render(request, 'stock/performance_summary_hub.html', context)
+
+
+@login_required
+def group_performance_summary_view(request, vehicle_pk=None):
+    """
+    Calculates and displays daily and monthly sales totals for a specific
+    vehicle or for the store (sales with no vehicle).
+    """
+    user = request.user
+    
+    # Filter the base queryset based on the selected group
+    if vehicle_pk:
+        grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk, user=user)
+        grouping_name = f"Performance Summary for: {grouping_object.vehicle_number}"
+        base_query = SalesTransaction.objects.filter(user=user, assigned_vehicle=grouping_object)
+    else:
+        grouping_object = None
+        grouping_name = "Performance Summary for: Store"
+        base_query = SalesTransaction.objects.filter(user=user, assigned_vehicle__isnull=True)
+
+    # --- Daily Sales Calculation ---
+    # Group transactions by day and sum the revenue for each day
+    daily_summary = base_query.annotate(
+        day=TruncDate('transaction_time')
+    ).values('day').annotate(
+        total_revenue=Sum('grand_total_revenue')
+    ).order_by('-day')
+
+    # --- Monthly Sales Calculation ---
+    # Group transactions by month and sum the revenue for each month
+    monthly_summary = base_query.annotate(
+        month=TruncMonth('transaction_time')
+    ).values('month').annotate(
+        total_revenue=Sum('grand_total_revenue')
+    ).order_by('-month')
+
+    context = {
+        'grouping_name': grouping_name,
+        'daily_summary': daily_summary,
+        'monthly_summary': monthly_summary,
+    }
+    return render(request, 'stock/group_performance_summary.html', context)
+
+
+
+@login_required
+def sales_group_details_view(request, vehicle_pk=None):
+    """
+    Displays a filtered list of sales transactions for a specific group
+    (either a vehicle or the store).
+    """
+    user = request.user
+    
+    # Start with the base query for all sales for the user.
+    base_query = SalesTransaction.objects.filter(user=user).select_related(
+        'customer_shop', 'assigned_vehicle'
+    ).prefetch_related('items__product_detail_snapshot__product_base')
+
+    # Filter the query based on the group selected.
+    if vehicle_pk:
+        # User selected a specific vehicle.
+        grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk, user=user)
+        grouping_name = f"Sales for Vehicle: {grouping_object.vehicle_number}"
+        transactions_list = base_query.filter(assigned_vehicle=grouping_object)
+    else:
+        # User selected the "Store".
+        grouping_object = None
+        grouping_name = "Store Sales (No Vehicle)"
+        transactions_list = base_query.filter(assigned_vehicle__isnull=True)
+
+    # --- Date Filtering (Optional but recommended) ---
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    if start_date:
+        transactions_list = transactions_list.filter(transaction_time__date__gte=start_date)
+    if end_date:
+        transactions_list = transactions_list.filter(transaction_time__date__lte=end_date)
+    
+    # Final ordering
+    transactions_list = transactions_list.order_by('-transaction_time')
+
+    # --- Pagination ---
+    paginator = Paginator(transactions_list, 50) # 50 sales per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'grouping_name': grouping_name,
+        'page_obj': page_obj,
+        'transactions': page_obj.object_list,
+    }
+    # We can reuse the main transaction list template.
+    return render(request, 'stock/all_transactions_list.html', context)
