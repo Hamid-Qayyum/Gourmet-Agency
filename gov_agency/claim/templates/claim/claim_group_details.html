@@ -31,14 +31,26 @@
                                  <span class="badge {% if claim.status == 'COMPLETED' %}badge-success{% elif claim.status == 'AWAITING_PROCESSING' %}badge-warning{% else %}badge-ghost{% endif %}">
                                     {{ claim.get_status_display }}</span>
                                  <!-- The delete button only shows for claims that are not yet completed -->
-                                 {% if claim.status != 'COMPLETED' %}
-                                        <button type="button" 
+                                 {% if claim.status == 'COMPLETED' %}
+                                    <a href="{% url 'claim:edit_claim' claim_pk=claim.pk %}" class="btn btn-xs btn-info btn-outline ml-2">
+                                        Edit
+                                    </a>
+                                    <!-- The button for COMPLETED claims -->
+                                    <button type="button" 
+                                        class="btn btn-xs btn-error btn-outline ml-2 open-reverse-modal-btn"
+                                        data-claim-pk="{{ claim.pk }}"
+                                        data-claim-info="Claim #{{ claim.pk }}">
+                                        Reverse & Delete
+                                    </button>
+                                {% else %}
+                                    <!-- The button for PENDING/AWAITING_PROCESSING claims -->
+                                    <button type="button" 
                                         class="btn btn-xs btn-error btn-outline ml-2 open-delete-modal-btn"
                                         data-claim-pk="{{ claim.pk }}"
-                                        data-claim-info="Claim #{{ claim.pk }} from {{ claim.claimed_from_shop.name|default:'N/A' }}">
+                                        data-claim-info="Claim #{{ claim.pk }}">
                                         Delete
-                                    </button>                                 
-                                    {% endif %}
+                                    </button>
+                                {% endif %}
                             </div>
                         </div>
                         <p class="text-sm mt-2"><b>Reason:</b> {{ claim.reason|default:"No reason provided." }}</p>
@@ -101,6 +113,29 @@
         </div>
         <label class="modal-backdrop" for="delete_claim_modal">Close</label>
     </div>
+
+
+
+
+    <!-- REVERSE COMPLETED Claim Confirmation Modal -->
+<input type="checkbox" id="reverse_claim_modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg text-error">Confirm Reversal and Deletion</h3>
+        <p id="reverse-modal-text" class="py-4">Are you sure?</p>
+        <p class="mt-2 mb-6 text-warning-content bg-warning/20 p-3 rounded-md text-sm">
+            <strong>Warning:</strong> This will permanently delete the claim and reverse all associated stock movements. This should only be done to correct a mistake.
+        </p>
+        <div class="modal-action">
+            <label for="reverse_claim_modal" class="btn btn-ghost">Cancel</label>
+            <form id="reverse-claim-form" method="POST" action="">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-error">Yes, Reverse and Delete</button>
+            </form>
+        </div>
+    </div>
+    <label class="modal-backdrop" for="reverse_claim_modal">Close</label>
+</div>
 </div>
 {% endblock %}
 
@@ -134,5 +169,27 @@ document.addEventListener('DOMContentLoaded', function() {
             deleteModalCheckbox.checked = true;
         });
     });
+
+
+    // --- NEW JAVASCRIPT for the REVERSE modal ---
+const reverseModalCheckbox = document.getElementById('reverse_claim_modal');
+const reverseModalText = document.getElementById('reverse-modal-text');
+const reverseClaimForm = document.getElementById('reverse-claim-form');
+const reverseButtons = document.querySelectorAll('.open-reverse-modal-btn');
+
+reverseButtons.forEach(button => {
+    button.addEventListener('click', function() {
+        const claimPk = this.dataset.claimPk;
+        const claimInfo = this.dataset.claimInfo;
+
+        reverseModalText.textContent = `Are you sure you want to reverse and delete "${claimInfo}"?`;
+        
+        const reverseUrl = `{% url 'claim:reverse_completed_claim' claim_pk=0 %}`.replace('0', claimPk);
+        reverseClaimForm.setAttribute('action', reverseUrl);
+        
+        reverseModalCheckbox.checked = true;
+        });
+    });
 });
-</script>{% endblock %}
+</script>
+{% endblock %}

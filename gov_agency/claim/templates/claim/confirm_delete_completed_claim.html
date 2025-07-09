@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Reversal{% endblock %}
+{% block page_title %}Confirm Claim Reversal{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6 max-w-lg mx-auto">
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-error">Reverse and Delete Claim #{{ claim.pk }}</h2>
+            <p class="mt-4">
+                Are you sure you want to permanently delete this completed claim?
+            </p>
+            <p class="mt-2 mb-6 text-warning-content bg-warning/20 p-3 rounded-md text-sm">
+                <strong>Warning:</strong> This will reverse all associated stock movements. For example, any stock that was added to inventory from this claim will be removed, and any stock given in exchange will be added back. This action cannot be undone.
+            </p>
+            <div class="card-actions justify-end mt-6">
+                <a href="{% url 'claim:claims_hub' %}" class="btn btn-ghost">Cancel</a>
+                <form method="post" action="{% url 'claim:reverse_completed_claim' claim_pk=claim.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-error">Yes, Reverse and Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -77,12 +77,22 @@ def claim_group_details_view(request, vehicle_pk=None):
 @login_required
 def create_claim_view(request):
     session_key = f'claim_items_{request.user.id}'
-    vehicle_pk = request.GET.get('vehicle_pk')
-    initial_form_data = {}
-    if vehicle_pk:
-        initial_form_data['retrieval_vehicle'] = vehicle_pk
+    header_session_key = 'claim_to_restore_header'
 
-    finalize_form = FinalizeClaimForm(user=request.user, initial=initial_form_data)
+    if request.method == 'GET' and header_session_key in request.session:
+        initial_header_data = request.session.get(header_session_key, {})
+        finalize_form = FinalizeClaimForm(user=request.user, initial=initial_header_data)
+        del request.session[header_session_key]
+    else:
+        # Normal operation: create a blank form
+        finalize_form = FinalizeClaimForm(user=request.user)
+
+    # vehicle_pk = request.GET.get('vehicle_pk')
+    # initial_form_data = {}
+    # if vehicle_pk:
+    #     initial_form_data['retrieval_vehicle'] = vehicle_pk
+
+    # finalize_form = FinalizeClaimForm(user=request.user, initial=initial_form_data)
     # Forms for the page
     claimed_form = AddClaimItemForm(user=request.user, prefix='claimed')
     exchanged_form = AddClaimItemForm(user=request.user, prefix='exchanged', for_exchange=True)
@@ -212,3 +222,126 @@ def delete_claim_view(request, claim_pk):
 
     # If someone tries to access this URL with a GET request, just send them to the hub.
     return redirect('claim:claims_hub')
+
+
+
+
+@login_required
+@transaction.atomic # Ensure all operations succeed or fail together
+def reverse_completed_claim_view(request, claim_pk):
+    """
+    Handles the deletion of a COMPLETED claim by reversing all its
+    associated stock movements before deleting the record.
+    """
+    # This view specifically targets COMPLETED claims.
+    claim_to_reverse = get_object_or_404(
+        Claim, 
+        pk=claim_pk, 
+        user=request.user,
+        status='COMPLETED'
+    )
+    
+    if request.method == 'POST':
+        try:
+            # --- Reverse Stock Movements ---
+            for item in claim_to_reverse.items.all():
+                product_detail = item.product_detail
+                
+                if item.item_type == 'CLAIMED':
+                    # This item was returned (stock IN), so now we must DECREASE stock to reverse it.
+                    if not product_detail.decrease_stock(item.quantity_decimal):
+                        # This should be rare, but is a critical safety check.
+                        raise Exception(f"Reversal failed: Not enough stock for '{product_detail}' to reverse the claim.")
+                
+                elif item.item_type == 'EXCHANGED':
+                    # This item was given out (stock OUT), so now we must INCREASE stock to reverse it.
+                    product_detail.increase_stock(item.quantity_decimal)
+
+            claim_pk_str = str(claim_to_reverse.pk)
+            # After all stock is adjusted, delete the claim record and its items.
+            claim_to_reverse.delete()
+            
+            messages.success(request, f"Claim #{claim_pk_str} has been reversed and deleted. Stock has been adjusted back to its original state.")
+            # Always redirect to the main hub after deletion
+            return redirect('claim:claims_hub')
+
+        except Exception as e:
+            messages.error(request, f"An error occurred while reversing the claim: {str(e)}")
+            return redirect('claim:claims_hub')
+
+    # For a GET request, you would typically render a confirmation page.
+    # We can reuse the same confirmation template.
+    context = {
+        'claim': claim_to_reverse
+    }
+    return render(request, 'claim/confirm_delete_completed_claim.html', context)
+
+
+
+@login_required
+@transaction.atomic # Ensure all operations succeed or fail together
+def edit_claim_view(request, claim_pk):
+    """
+    Handles the "Edit" action for a completed claim.
+    It reverses the claim, stores its data in the session, and redirects
+    to the create page to pre-fill the form for re-creation.
+    """
+    claim_to_edit = get_object_or_404(
+        Claim, 
+        pk=claim_pk, 
+        user=request.user,
+        status='COMPLETED'
+    )
+
+    # --- 1. Store the claim's data in the session for restoration ---
+    # Header info for the FinalizeClaimForm
+    claim_header_data = {
+        'claimed_from_shop': claim_to_edit.claimed_from_shop.pk if claim_to_edit.claimed_from_shop else None,
+        'retrieval_vehicle': claim_to_edit.retrieval_vehicle.pk if claim_to_edit.retrieval_vehicle else None,
+        'reason': claim_to_edit.reason,
+    }
+    
+    # Item info for the session cart
+    claim_items_data = []
+    for item in claim_to_edit.items.all():
+        claim_items_data.append({
+            'product_detail_id': item.product_detail.id,
+            'product_display': str(item.product_detail),
+            'quantity': str(item.quantity_decimal),
+            'cost_price': str(item.cost_price_at_claim),
+            'item_type': item.item_type,
+        })
+        
+    # Put all this data into the session
+    request.session['claim_to_restore_header'] = claim_header_data
+    request.session[f'claim_items_{request.user.id}'] = claim_items_data
+
+    # --- 2. Reverse the stock movements of the old claim ---
+    try:
+        for item in claim_to_edit.items.all():
+            product_detail = item.product_detail
+            if item.item_type == 'CLAIMED':
+                # Reversal: DECREASE stock
+                if not product_detail.decrease_stock(item.quantity_decimal):
+                    raise Exception(f"Reversal failed: Not enough stock for '{product_detail}' to reverse the claim.")
+            elif item.item_type == 'EXCHANGED':
+                # Reversal: INCREASE stock
+                product_detail.increase_stock(item.quantity_decimal)
+    except Exception as e:
+        # If reversal fails, clear the session data and show an error
+        if 'claim_to_restore_header' in request.session:
+            del request.session['claim_to_restore_header']
+        if f'claim_items_{request.user.id}' in request.session:
+            del request.session[f'claim_items_{request.user.id}']
+        messages.error(request, f"Could not edit claim. Reversal failed: {e}")
+        return redirect('claim:claims_hub')
+
+    # --- 3. Delete the old claim record ---
+    claim_pk_str = str(claim_to_edit.pk)
+    claim_to_edit.delete()
+    
+    messages.info(request, f"Editing Claim #{claim_pk_str}. The original claim has been reversed. Please make your corrections and re-submit.")
+    
+    # --- 4. Redirect to the create page ---
+    # The create page will now find the data in the session and pre-fill itself.
+    return redirect('claim:create_claim')

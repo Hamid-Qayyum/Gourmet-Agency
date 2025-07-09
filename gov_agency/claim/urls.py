@@ -13,4 +13,10 @@ urlpatterns = [
     path('create/', views.create_claim_view, name='create_claim'),
     path('delete/<int:claim_pk>/', views.delete_claim_view, name='delete_claim'),
     path('process_pending/', views.process_pending_claims_view, name='process_pending_claims'),
+
+
+    path('delete_completed/<int:claim_pk>/', views.reverse_completed_claim_view, name='reverse_completed_claim'),
+    path('edit/<int:claim_pk>/', views.edit_claim_view, name='edit_claim'),
+
+
 ]
