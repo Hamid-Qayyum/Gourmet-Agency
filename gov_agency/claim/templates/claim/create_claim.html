@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Create New Claim/Exchange{% endblock %}
+{% block page_title %}New Claim/Exchange{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Left Column: Forms for adding items -->
+    <div class="lg:col-span-2 space-y-6">
+        <!-- Add Item Returned by Customer -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-warning">1. Add Item Returned by Customer (Stock IN)</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_claimed">
+                    {{ claimed_form.as_p }}
+                    <div class="card-actions justify-end mt-4"><button type="submit" class="btn btn-warning">Add Returned Item</button></div>
+                </form>
+            </div>
+        </div>
+        <!-- Add Item Given in Exchange -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-info">2. Add Item Given in Exchange (Stock OUT)</h2>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_exchanged">
+                    {{ exchanged_form.as_p }}
+                    <div class="card-actions justify-end mt-4"><button type="submit" class="btn btn-info">Add Exchanged Item</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Current Claim and Finalize -->
+    <div class="lg:col-span-1 space-y-6">
+        <div class="card bg-base-100 shadow-xl sticky top-24">
+            <div class="card-body">
+                <h2 class="card-title">Current Claim Items</h2>
+                {% if claim_items_session %}
+                    <div class="space-y-2 mt-2">
+                        {% for item in claim_items_session %}
+                        <div class="flex justify-between items-center p-2 rounded-md {% if item.item_type == 'CLAIMED' %}bg-warning/20{% else %}bg-info/20{% endif %}">
+                            <div>
+                                <div class="font-semibold text-sm">{{ item.product_display }}</div>
+                                <div class="text-xs">{{ item.quantity }} x Rs {{ item.cost_price }}</div>
+                            </div>
+                            <form method="post" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="remove_item">
+                                <input type="hidden" name="item_index" value="{{ forloop.counter0 }}">
+                                <button type="submit" class="btn btn-xs btn-circle btn-error btn-outline">✕</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="divider"></div>
+                    <h2 class="card-title mt-4">3. Finalize Claim</h2>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="finalize_claim">
+                        {{ finalize_form.as_p }}
+                        <div class="card-actions justify-end mt-4"><button type="submit" class="btn btn-primary btn-block">Submit Claim</button></div>
+                    </form>
+                {% else %}
+                    <p class="text-sm text-base-content/60">Add items to start building the claim.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

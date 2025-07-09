@@ -1,65 +1,61 @@
+# claim/models.py
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from decimal import Decimal
 from django.core.validators import MinValueValidator
 
+# The Claim "Header"
 class Claim(models.Model):
-    """
-    Represents a claim for expired or damaged stock, which is removed from inventory.
-    """
     CLAIM_STATUS_CHOICES = [
-        ('PENDING', 'Pending Approval'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
+        ('PENDING', 'Pending - Being Built'),
+        ('AWAITING_PROCESSING', 'Awaiting Stock Adjustment'),
+        ('COMPLETED', 'Completed'),
     ]
-
-    # User who filed the claim
-    user = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="claims_filed"
-    )
-    
-    # The specific product batch being claimed
-    product_detail = models.ForeignKey(
-        'stock.ProductDetail', # String reference to model in 'stock' app
-        on_delete=models.PROTECT, # Don't delete a ProductDetail if it has claims
-        related_name="claims"
-    )
-    
-    # Quantity claimed, in the same 'MasterUnits.IndividualItems' format
-    quantity_claimed_decimal = models.DecimalField(
-        max_digits=10, decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))],
-        help_text="Quantity claimed in 'MasterUnits.IndividualItems' format (e.g., 1.05)."
-    )
-    
-    # Optional: Where the claim originated from (a registered shop)
-    claimed_from_shop = models.ForeignKey(
-        'stock.Shop', # String reference
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="shop_claims"
-    )
-    
-    # Optional: Which vehicle was used to retrieve the claimed items
-    retrieval_vehicle = models.ForeignKey(
-        'stock.Vehicle', # String reference
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="claims_retrieved"
-    )
-    
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="claims_filed")
+    claimed_from_shop = models.ForeignKey('stock.Shop', on_delete=models.SET_NULL, null=True, blank=True, related_name="shop_claims")
+    retrieval_vehicle = models.ForeignKey('stock.Vehicle', on_delete=models.SET_NULL, null=True, blank=True, related_name="claims_retrieved")
     reason = models.TextField(help_text="Reason for the claim (e.g., Expired, Damaged).")
-    status = models.CharField(max_length=20, choices=CLAIM_STATUS_CHOICES, default='APPROVED')
+    status = models.CharField(max_length=30, choices=CLAIM_STATUS_CHOICES, default='PENDING')
     claim_date = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"Claim for {self.quantity_claimed_decimal} of {self.product_detail.product_base.name} on {self.claim_date.strftime('%Y-%m-%d')}"
+        return f"Claim #{self.pk} from {self.claimed_from_shop or 'N/A'} on {self.claim_date.strftime('%Y-%m-%d')}"
+    
+    @property
+    def value_of_items_given(self):
+        """Calculates the total cost of items given out in exchange."""
+        total_cost = Decimal('0.00')
+        exchanged_items = self.items.filter(item_type='EXCHANGED')
+        for item in exchanged_items:
+            total_cost += item.total_cost
+        return total_cost
 
     class Meta:
         ordering = ['-claim_date']
-        verbose_name = "Stock Claim"
-        verbose_name_plural = "Stock Claims"
+
+# The NEW "Claim Item" model
+class ClaimItem(models.Model):
+    ITEM_TYPE_CHOICES = [
+        ('CLAIMED', 'Item Returned by Customer'), # Stock IN
+        ('EXCHANGED', 'Item Given in Exchange'),   # Stock OUT
+    ]
+    claim = models.ForeignKey(Claim, on_delete=models.CASCADE, related_name="items")
+    product_detail = models.ForeignKey('stock.ProductDetail', on_delete=models.PROTECT, related_name="claim_items")
+    item_type = models.CharField(max_length=20, choices=ITEM_TYPE_CHOICES)
+    quantity_decimal = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    # Snapshot the cost for financial tracking
+    cost_price_at_claim = models.DecimalField(max_digits=10, decimal_places=2)
+
+    @property
+    def total_cost(self):
+        """Calculates the total cost of this line item."""
+        individual_items = self.product_detail._get_items_from_decimal(self.quantity_decimal)
+        return (Decimal(individual_items) * self.cost_price_at_claim).quantize(Decimal('0.01'))
+
+    def __str__(self):
+        return f"{self.get_item_type_display()}: {self.quantity_decimal} of {self.product_detail.product_base.name}"

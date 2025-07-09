@@ -4,193 +4,211 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import JsonResponse
 from decimal import Decimal
+from django.urls import reverse
+
 
 # Import models from other apps using their app name
 from stock.models import Vehicle, ProductDetail
-from .models import Claim
-from .forms import ClaimForm
+from .models import Claim,ClaimItem
+from .forms import FinalizeClaimForm,AddClaimItemForm
 
-# 1. The Hub View (lists vehicles and store)
+
 @login_required
 def claims_hub_view(request):
-    vehicles = Vehicle.objects.filter(is_active=True, user=request.user) # Or filter by user if needed
+    """
+    This is the main navigation hub. It shows a list of vehicles and the 'Store'
+    option, AND it also lists any claims that are awaiting stock processing.
+    """
+    user = request.user
+    
+    # 1. Fetch vehicles for the navigation cards
+    vehicles = Vehicle.objects.filter(user=user, is_active=True).order_by('vehicle_number')
+    
+    # 2. Fetch claims that need action
+    pending_claims = Claim.objects.filter(user=user, status='AWAITING_PROCESSING')
+    
     context = {
         'vehicles': vehicles,
+        'pending_claims': pending_claims,
+        'can_process': pending_claims.exists(), # Flag for the "Process" button
     }
     return render(request, 'claim/claims_hub.html', context)
-
 
 
 # 2. The Group Details View (for a specific vehicle or the store)
 @login_required
 def claim_group_details_view(request, vehicle_pk=None):
-    add_claim_form = ClaimForm(user=request.user)
+    """
+    UPDATED: This view now lists the multi-item claims, filtered
+    by the retrieval vehicle or by claims with no vehicle ("Store").
+    It also provides context to its "Create" button.
+    """
+    user = request.user
     
     if vehicle_pk:
-        grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk)
-        grouping_name = f"Vehicle: {grouping_object.vehicle_number}"
-        claims_list = Claim.objects.filter(retrieval_vehicle=grouping_object)
-    else: # This is for "Store" claims
+        grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk, user=user)
+        grouping_name = f"Claims for Vehicle: {grouping_object.vehicle_number}"
+        base_query = Claim.objects.filter(retrieval_vehicle=grouping_object)
+    else:
         grouping_object = None
         grouping_name = "Store Claims (No Vehicle)"
-        claims_list = Claim.objects.filter(retrieval_vehicle__isnull=True)
+        base_query = Claim.objects.filter(retrieval_vehicle__isnull=True)
 
-    # Further filter by the user who filed the claim
-    claims_list = claims_list.filter(user=request.user).select_related(
-        'product_detail__product_base', 'claimed_from_shop'
-    ).order_by('-claim_date')
+    claims_list = base_query.filter(user=user).select_related(
+        'claimed_from_shop', 'retrieval_vehicle'
+    ).prefetch_related('items__product_detail__product_base').order_by('-claim_date')
+
+    # Pre-process items for cleaner template logic
+    for claim in claims_list:
+        claim.claimed_items = [item for item in claim.items.all() if item.item_type == 'CLAIMED']
+        claim.exchanged_items = [item for item in claim.items.all() if item.item_type == 'EXCHANGED']
 
     context = {
-        'add_form': add_claim_form,
         'claims': claims_list,
         'grouping_name': grouping_name,
         'grouping_object': grouping_object,
-        # This flag tells the add form's action where to redirect
-        'vehicle_pk_for_form': vehicle_pk if vehicle_pk else 0,
+        'vehicle_pk': vehicle_pk, # Pass this to the template for the create link
     }
     return render(request, 'claim/claim_group_details.html', context)
+
 
 
 # 3. View to handle the POST from the "Add Claim" modal
 @login_required
 def create_claim_view(request):
+    session_key = f'claim_items_{request.user.id}'
+    vehicle_pk = request.GET.get('vehicle_pk')
+    initial_form_data = {}
+    if vehicle_pk:
+        initial_form_data['retrieval_vehicle'] = vehicle_pk
+
+    finalize_form = FinalizeClaimForm(user=request.user, initial=initial_form_data)
+    # Forms for the page
+    claimed_form = AddClaimItemForm(user=request.user, prefix='claimed')
+    exchanged_form = AddClaimItemForm(user=request.user, prefix='exchanged', for_exchange=True)
+
     if request.method == 'POST':
-        form = ClaimForm(request.POST, user=request.user)
-        if form.is_valid():
-            product_detail = form.cleaned_data['product_detail']
-            quantity_claimed = form.cleaned_data['quantity_claimed_decimal']
+        action = request.POST.get('action')
+        current_items = request.session.get(session_key, [])
+
+        if action == 'add_claimed' or action == 'add_exchanged':
+            form_prefix = 'claimed' if action == 'add_claimed' else 'exchanged'
+            form_is_for_exchange = True if action == 'add_exchanged' else False
             
-            try:
+            form = AddClaimItemForm(request.POST, user=request.user, prefix=form_prefix, for_exchange=form_is_for_exchange)
+            if form.is_valid():
+                product_detail = form.cleaned_data['product_detail']
+                quantity = form.cleaned_data['quantity']
+                
+                current_items.append({
+                    'product_detail_id': product_detail.id,
+                    'product_display': str(product_detail),
+                    'quantity': str(quantity),
+                    'cost_price': str(product_detail.price_per_item),
+                    'item_type': 'CLAIMED' if action == 'add_claimed' else 'EXCHANGED',
+                })
+                request.session[session_key] = current_items
+                messages.success(request, "Item added to claim.")
+            else:
+                messages.error(request, "Error adding item. Please check the form.")
+            return redirect('claim:create_claim')
+
+        elif action == 'remove_item':
+            item_index = int(request.POST.get('item_index'))
+            if 0 <= item_index < len(current_items):
+                current_items.pop(item_index)
+                request.session[session_key] = current_items
+                messages.info(request, "Item removed.")
+            return redirect('claim:create_claim')
+            
+        elif action == 'finalize_claim':
+            finalize_form = FinalizeClaimForm(request.POST, user=request.user)
+            if not current_items:
+                messages.warning(request, "Cannot finalize an empty claim.")
+                return redirect('claim:create_claim')
+
+            if finalize_form.is_valid():
                 with transaction.atomic():
-                    # Re-fetch with lock to prevent race conditions
-                    pd_to_claim = ProductDetail.objects.select_for_update().get(pk=product_detail.pk)
+                    claim_header = finalize_form.save(commit=False)
+                    claim_header.user = request.user
+                    claim_header.status = 'AWAITING_PROCESSING'
+                    claim_header.save()
                     
-                    # Decrease stock first
-                    if not pd_to_claim.decrease_stock(quantity_claimed):
-                        raise Exception("Not enough stock for this claim (should be caught by form validation).")
+                    for item_data in current_items:
+                        ClaimItem.objects.create(
+                            claim=claim_header,
+                            product_detail_id=item_data['product_detail_id'],
+                            item_type=item_data['item_type'],
+                            quantity_decimal=Decimal(item_data['quantity']),
+                            cost_price_at_claim=Decimal(item_data['cost_price'])
+                        )
                     
-                    # If stock decrease is successful, save the claim
-                    claim = form.save(commit=False)
-                    claim.user = request.user
-                    claim.save()
-                    messages.success(request, f"Claim for {quantity_claimed} of {product_detail.product_base.name} recorded successfully.")
-            except Exception as e:
-                messages.error(request, f"Error creating claim: {str(e)}")
-        else:
-            # Create a string of errors to pass back in a message
-            error_string = ". ".join([f"{field}: {', '.join(errors)}" for field, errors in form.errors.items()])
-            messages.error(request, f"Failed to create claim. {error_string}")
-        
-        # Redirect back to the group details page it came from
-        vehicle_pk = request.POST.get('vehicle_pk_for_redirect')
-        if vehicle_pk and vehicle_pk != '0':
-            return redirect('claim:claims_by_vehicle', vehicle_pk=vehicle_pk)
-        else:
-            return redirect('claim:claims_by_store')
-            
-    # GET requests to this URL are not expected
-    return redirect('claim:claims_hub')
+                    del request.session[session_key]
+                    messages.success(request, f"Claim #{claim_header.pk} created and is awaiting stock processing.")
+                    return redirect('claim:claims_hub')
+
+    context = {
+        'claimed_form': claimed_form,
+        'exchanged_form': exchanged_form,
+        'finalize_form': finalize_form,
+        'claim_items_session': request.session.get(session_key, []),
+    }
+    return render(request, 'claim/create_claim.html', context)
 
 
 
 @login_required
-def update_claim_view(request, claim_pk):
-    """Handles the POST submission from the 'Update Claim' modal."""
-    claim_instance = get_object_or_404(Claim, pk=claim_pk, user=request.user)
-    # Store original values before any changes
-    original_product_detail = claim_instance.product_detail
-    original_quantity = claim_instance.quantity_claimed_decimal
-
+def process_pending_claims_view(request):
     if request.method == 'POST':
-        form = ClaimForm(request.POST, instance=claim_instance, user=request.user)
-        if form.is_valid():
-            try:
-                with transaction.atomic():
-                    # Get the new data from the form
-                    new_product_detail = form.cleaned_data['product_detail']
-                    new_quantity = form.cleaned_data['quantity_claimed_decimal']
+        claims_to_process = Claim.objects.filter(user=request.user, status='AWAITING_PROCESSING')
+        processed_count = 0
+        try:
+            with transaction.atomic():
+                for claim in claims_to_process:
+                    for item in claim.items.all():
+                        product_detail = item.product_detail
+                        if item.item_type == 'CLAIMED':
+                            product_detail.increase_stock(item.quantity_decimal)
+                        elif item.item_type == 'EXCHANGED':
+                            product_detail.decrease_stock(item.quantity_decimal)
                     
-                    # --- Stock Adjustment Logic ---
-                    # Case 1: The product batch itself was changed.
-                    if original_product_detail.pk != new_product_detail.pk:
-                        # Add stock back to the OLD product batch
-                        original_product_detail.increase_stock(original_quantity)
-                        # Decrease stock from the NEW product batch
-                        if not new_product_detail.decrease_stock(new_quantity):
-                            raise Exception(f"Not enough stock for the newly selected product batch '{new_product_detail}'.")
-                    # Case 2: Product is the same, but quantity changed.
-                    elif original_quantity != new_quantity:
-                        quantity_difference = new_quantity - original_quantity
-                        if quantity_difference > 0: # Claim amount increased
-                            if not original_product_detail.decrease_stock(quantity_difference):
-                                raise Exception("Not enough stock for the increased claim amount.")
-                        elif quantity_difference < 0: # Claim amount decreased
-                            original_product_detail.increase_stock(abs(quantity_difference))
-                    
-                    # If we reach here, all stock adjustments were successful. Save the form.
-                    form.save()
-                    messages.success(request, f"Claim #{claim_instance.pk} updated successfully.")
-            except Exception as e:
-                messages.error(request, f"Error updating claim: {str(e)}")
-        else:
-            error_string = ". ".join([f"{field}: {', '.join(errors)}" for field, errors in form.errors.items()])
-            messages.error(request, f"Failed to update claim. {error_string}")
+                    claim.status = 'COMPLETED'
+                    claim.save(update_fields=['status'])
+                    processed_count += 1
+            
+            if processed_count > 0:
+                messages.success(request, f"Successfully processed {processed_count} pending claim(s). Stock has been adjusted.")
+            else:
+                messages.info(request, "No pending claims were found to process.")
 
-        # Redirect back to the group details page it came from
-        vehicle_pk = request.POST.get('vehicle_pk_for_redirect')
-        if vehicle_pk and vehicle_pk != '0':
-            return redirect('claim:claims_by_vehicle', vehicle_pk=vehicle_pk)
-        else:
-            return redirect('claim:claims_by_store')
-
-    # GET requests to this URL are not expected
+        except Exception as e:
+            messages.error(request, f"An error occurred during processing: {e}")
+            
     return redirect('claim:claims_hub')
+
+
 
 
 @login_required
 def delete_claim_view(request, claim_pk):
-    """Handles the POST submission from the 'Delete Claim' confirmation modal."""
-    claim_instance = get_object_or_404(Claim, pk=claim_pk, user=request.user)
+    """
+    UPDATED: Deletes a Claim and its items. Now handles POST requests
+    from a modal and always redirects to the main hub.
+    """
+    claim_to_delete = get_object_or_404(
+        Claim, 
+        pk=claim_pk, 
+        user=request.user,
+        status__in=['PENDING', 'AWAITING_PROCESSING']
+    )
     
+    # This view now only needs to handle POST requests from the modal's form.
     if request.method == 'POST':
-        quantity_to_return = claim_instance.quantity_claimed_decimal
-        product_detail = claim_instance.product_detail
-        
-        try:
-            with transaction.atomic():
-                # Add the stock back to inventory first
-                if not product_detail.increase_stock(quantity_to_return):
-                    raise Exception("Failed to return stock to inventory.")
-                
-                # Then delete the claim record
-                claim_instance.delete()
-                messages.success(request, f"Claim #{claim_pk} deleted and stock has been returned to inventory.")
-        except Exception as e:
-            messages.error(request, f"Error deleting claim: {str(e)}")
-        
-        # Redirect back to the group details page it came from
-        vehicle_pk = request.POST.get('vehicle_pk_for_redirect')
-        if vehicle_pk and vehicle_pk != '0':
-            return redirect('claim:claims_by_vehicle', vehicle_pk=vehicle_pk)
-        else:
-            return redirect('claim:claims_by_store')
+        claim_pk_str = str(claim_to_delete.pk)
+        claim_to_delete.delete() 
+        messages.success(request, f"Claim #{claim_pk_str} has been successfully deleted.")
+        # Always redirect to the main hub for simplicity and consistency.
+        return redirect('claim:claims_hub')
 
+    # If someone tries to access this URL with a GET request, just send them to the hub.
     return redirect('claim:claims_hub')
-
-
-@login_required
-def ajax_get_claim_data(request, claim_pk):
-    """Serves data for a specific claim to populate the update modal via JS."""
-    try:
-        claim = get_object_or_404(Claim, pk=claim_pk, user=request.user)
-        data = {
-            'pk': claim.pk,
-            'product_detail': claim.product_detail.pk,
-            'quantity_claimed_decimal': str(claim.quantity_claimed_decimal),
-            'claimed_from_shop': claim.claimed_from_shop.pk if claim.claimed_from_shop else "",
-            'retrieval_vehicle': claim.retrieval_vehicle.pk if claim.retrieval_vehicle else "",
-            'reason': claim.reason or "",
-        }
-        return JsonResponse({'success': True, 'data': data})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
