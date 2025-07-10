@@ -2,60 +2,88 @@
 {% load static %}
 
 {% block title %}Pending Deliveries{% endblock %}
-{% block page_title %}Process Pending Deliveries{% endblock %}
+{% block page_title %}Pending Deliveries & Loading Sheets{% endblock %}
 
 {% block extra_head %}{{ block.super }}
 <style>
-    /* Style for printing */
+    /* CSS for printing a specific loading sheet */
     @media print {
-        body * {
-            visibility: hidden; /* Hide everything by default */
-        }
-        #print-section, #print-section * {
-            visibility: visible; /* Show only the print section */
-        }
-        #print-section {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-        }
-        .btn, .form-control {
-            display: none; /* Hide buttons and search bar in print view */
-        }
-        .table {
-            font-size: 10pt;
-        }
+        body * { visibility: hidden; }
+        .printable-section, .printable-section * { visibility: visible; }
+        .printable-section { position: absolute; left: 0; top: 0; width: 100%; }
+        .non-printable { display: none; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="p-4 md:p-6">
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        <h1 class="text-2xl font-bold">Sales Pending Delivery</h1>
-        
-        <div class="flex items-center gap-4 w-full sm:w-auto">
-            <!-- Real-time search bar -->
-            <div class="form-control w-full sm:w-64">
-                <input type="text" id="deliverySearchInput" placeholder="Search..." class="w-full rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent" />
-            </div>
-            
-            <!-- Print button -->
-            <button id="printPendingDeliveriesBtn"
-    class="inline-block w-auto text-center min-w-[100px] px-1 py-1 text-white transition-all bg-green-400 hover:bg-green-600  dark:bg-gray dark:text-gray-800 rounded-md  sm:w-auto hover:bg-gray-200 hover:text-white shadow-neutral-100 dark:shadow-neutral-400 hover:shadow-1xl hover:shadow-neutral-400 hover:-translate-y-px flex items-center gap-2">
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-        stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round"
-            d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-    </svg>
-    Print List
-</button>
-        </div>
-    </div>
+    <!-- ======================= NEW SECTION: Loading Sheets ======================= -->
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold mb-4">Vehicle Loading Sheets</h1>
+        {% if loading_sheets %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {% for vehicle, items in loading_sheets.items %}
+                    <div class="card bg-base-100 shadow-xl border">
+                        <div class="card-body">
+                            <div class="flex justify-between items-start">
+                                <h2 class="card-title">{{ vehicle.vehicle_number }}</h2>
+                                <!-- Print button for THIS specific sheet -->
+                                <button class="btn btn-sm btn-outline non-printable hover:btn-success" onclick="printLoadingSheet('sheet-{{ vehicle.pk }}')">
+                                    Print Sheet
+                                </button>
+                            </div>
+                            <p class="text-sm text-base-content/70">{{ vehicle.driver_name|default:"No Driver" }}</p>
 
-    {% if pending_transactions %}
-        <div id="print-section"> {# This wrapper is used for printing #}
+                            <!-- This is the content that will be printed -->
+                            <div id="sheet-{{ vehicle.pk }}" class="printable-section">
+                                <h3 class="text-lg font-bold mb-2 print:block hidden">Loading Sheet: {{ vehicle.vehicle_number }}</h3>
+                                <div class="overflow-x-auto mt-4">
+                                    <table class="table table-sm w-full">
+                                        <thead>
+                                            <tr>
+                                                <th>Product</th>
+                                                <th class="text-right">Total Quantity</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for product_detail, total_quantity in items %}
+                                            <tr>
+                                                <td class="text-sm">
+                                                    {{ product_detail.product_base.name }}
+                                                    <span class="block text-xs">
+                                                        {{ product_detail.quantity_in_packing|floatformat:"-1g" }} {{ product_detail.unit_of_measure }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-right font-bold">{{ total_quantity }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-center text-base-content/70 py-4">No pending deliveries with assigned vehicles found.</p>
+        {% endif %}
+    </div>
+    <!-- ========================================================================= -->
+
+    <div class="divider"></div>
+
+    <!-- The original list of individual pending deliveries -->
+    <div class="mt-8">
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+            <h1 class="text-2xl font-bold">Detailed Pending Deliveries</h1>
+            <div class="form-control w-full sm:w-64">
+                <input type="text" id="deliverySearchInput" placeholder="Search deliveries..." class="input input-bordered w-full" />
+            </div>
+        </div>
+
+        {% if pending_transactions %}
             <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
                 <table class="table table-sm w-full" id="pendingDeliveriesTable">
                     <thead>
@@ -76,8 +104,7 @@
                             <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A" }}</td>
                             <td class="text-xs">
                                 {% for item in tx.items.all|slice:":2" %}
-                                    {{ item.product_detail_snapshot.product_base.name }} ({{item.quantity_sold_decimal}}) 
-                                    {{item.product_detail_snapshot.quantity_in_packing}} {{item.product_detail_snapshot.unit_of_measure}}<br>
+                                    {{ item.product_detail_snapshot.product_base.name }} ({{item.quantity_sold_decimal}})<br>
                                 {% endfor %}
                                 {% if tx.items.all.count > 2 %}...and more{% endif %}
                             </td>
@@ -92,57 +119,58 @@
                     </tbody>
                 </table>
             </div>
-        </div>
-        <p id="noResultsMessage" class="text-center text-base-content/70 py-8 hidden">No pending deliveries match your search.</p>
-    {% else %}
-        <p class="text-center text-base-content/70 py-8">No transactions are currently pending delivery.</p>
-    {% endif %}
+            <p id="noResultsMessage" class="text-center text-base-content/70 py-8 hidden">No pending deliveries match your search.</p>
+        {% else %}
+            <p class="text-center text-base-content/70 py-8">No transactions are currently pending delivery.</p>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 {{ block.super }}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // --- REAL-TIME SEARCH LOGIC ---
-    const searchInput = document.getElementById('deliverySearchInput');
-    const table = document.getElementById('pendingDeliveriesTable');
-    const tableRows = table ? table.querySelectorAll('tbody tr.delivery-row') : [];
-    const noResultsMessage = document.getElementById('noResultsMessage');
+    // --- NEW: Function to print a specific loading sheet ---
+    function printLoadingSheet(elementId) {
+        // Temporarily remove the 'printable-section' class from all other sheets
+        document.querySelectorAll('.printable-section').forEach(el => {
+            el.classList.remove('printable-section');
+        });
+        // Add the class to the one we want to print
+        const sheetToPrint = document.getElementById(elementId);
+        if (sheetToPrint) {
+            sheetToPrint.classList.add('printable-section');
+            window.print();
+        }
+    }
 
-    if (searchInput && tableRows.length > 0) {
-        searchInput.addEventListener('keyup', function () {
-            const searchTerm = searchInput.value.toLowerCase();
-            let visibleRows = 0;
+    // --- YOUR EXISTING REAL-TIME SEARCH LOGIC (UNCHANGED) ---
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('deliverySearchInput');
+        const table = document.getElementById('pendingDeliveriesTable');
+        const tableRows = table ? table.querySelectorAll('tbody tr.delivery-row') : [];
+        const noResultsMessage = document.getElementById('noResultsMessage');
 
-            tableRows.forEach(row => {
-                const rowText = row.textContent.toLowerCase();
-                if (rowText.includes(searchTerm)) {
-                    row.style.display = ''; // Show row
-                    visibleRows++;
-                } else {
-                    row.style.display = 'none'; // Hide row
+        if (searchInput && tableRows.length > 0) {
+            searchInput.addEventListener('keyup', function () {
+                const searchTerm = searchInput.value.toLowerCase();
+                let visibleRows = 0;
+
+                tableRows.forEach(row => {
+                    const rowText = row.textContent.toLowerCase();
+                    if (rowText.includes(searchTerm)) {
+                        row.style.display = '';
+                        visibleRows++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+
+                if (noResultsMessage) {
+                    noResultsMessage.style.display = (visibleRows === 0) ? 'block' : 'none';
                 }
             });
-
-            // Show or hide the "no results" message
-            if (noResultsMessage) {
-                if (visibleRows === 0) {
-                    noResultsMessage.style.display = 'block';
-                } else {
-                    noResultsMessage.style.display = 'none';
-                }
-            }
-        });
-    }
-
-    // --- PRINT BUTTON LOGIC ---
-    const printButton = document.getElementById('printPendingDeliveriesBtn');
-    if (printButton) {
-        printButton.addEventListener('click', function() {
-            window.print();
-        });
-    }
-});
+        }
+    });
 </script>
 {% endblock %}

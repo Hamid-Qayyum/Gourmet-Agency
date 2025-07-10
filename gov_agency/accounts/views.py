@@ -510,21 +510,20 @@ def generate_today_summary_view(request):
         # Get all debit amounts from both ledger models for today
         debit_from_shops = shop_financial_entries_today.aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
         debit_from_custom = custom_account_entries_today.aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
-        print(f'1st ....{debit_from_shops}')
-        print(f'2nd......{debit_from_custom}')
+        
         total_debit_today = debit_from_shops + debit_from_custom
-        print(f'3rd......{total_debit_today}')
         # Cash received calculation is unchanged
         cash_from_shops = sum(entry.credit_amount for entry in shop_financial_entries_today if entry.transaction_type == 'CASH_RECEIPT')
         cash_from_custom_accounts = custom_account_entries_today.aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        
         total_cash_received = cash_from_shops + cash_from_custom_accounts
         
         # --- FINAL NET CALCULATIONS (These formulas are already correct) ---
         cash_from_cash_sales = sales_today.filter(payment_type='CASH').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_physical_cash = (cash_from_cash_sales + total_cash_received) - total_expense
+        net_physical_cash = (cash_from_cash_sales + (total_cash_received - total_debit_today)) - total_expense
         
         cash_from_direct_sales = sales_today.filter(payment_type__in=['CASH', 'ONLINE']).aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_total_settlement = (cash_from_direct_sales + total_cash_received) - total_expense
+        net_total_settlement = (cash_from_direct_sales + (total_cash_received - total_debit_today)) - total_expense
         
         # --- SAVE THE SUMMARY ---
         summary, created = DailySummary.objects.update_or_create(

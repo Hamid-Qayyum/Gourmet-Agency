@@ -1,58 +1,68 @@
 {% extends "base.html" %}
 {% load humanize %}
-{% load account_filters %} {# Your custom sum_debit/sum_credit filters #}
+{% load account_filters %}
 
 {% block title %}Ledger for {{ customer_name }}{% endblock %}
 {% block page_title %}Manual Customer Ledger: {{ customer_name }}{% endblock %}
 
 {% block extra_head %}{{block.super}}
 <style>
-    /* ... (same styles as shop_ledger.html) ... */
     .debit-col { text-align: right; color: hsl(var(--er)); }
     .credit-col { text-align: right; color: hsl(var(--su)); }
     .balance-col { text-align: right; font-weight: bold; }
+
+    /* ================ 1. ADDED THIS: CSS TO CONTROL PRINTING ================ */
+    @media print {
+        body * { visibility: hidden; }
+        .printable-section, .printable-section * { visibility: visible; }
+        .printable-section { position: absolute; left: 0; top: 0; width: 100%; padding: 10mm; }
+        .non-printable { display: none !important; }
+        .table { font-size: 9.5pt; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="p-4 md:p-6">
-    <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
-        <div>
-            <h1 class="text-2xl font-bold">Financial Ledger: {{ customer_name }}</h1>
-            <p class="text-sm text-base-content/70">Unregistered Customer</p>
+    <!-- ================ 2. ADDED THIS: WRAPPER FOR PRINTABLE AREA ================ -->
+    <div class="printable-section">
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
+            <div>
+                <h1 class="text-2xl font-bold">Financial Ledger: {{ customer_name }}</h1>
+                <p class="text-sm text-base-content/70">Unregistered Customer</p>
+            </div>
+            <!-- This button will be hidden on print -->
+            <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0 non-printable">← Back to Hub</a>
         </div>
-        <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0">← Back to Hub</a>
-    </div>
 
-    <!-- Summary Stats -->
-    <div class="stats shadow mb-6 w-full">
-        <div class="stat">
-            <div class="stat-title">Total Credit Given</div>
-            <div class="stat-value text-error">Rs {{ total_debit|floatformat:2|intcomma }}</div>
-        </div>
-        <div class="stat">
-            <div class="stat-title">Total Cash Received</div>
-            <div class="stat-value text-success">Rs {{ total_credit|floatformat:2|intcomma }}</div>
-        </div>
-        <div class="stat">
-            <div class="stat-title">Current Outstanding Balance</div>
-            <div class="stat-value text-primary">Rs {{ current_balance|floatformat:2|intcomma }}</div>
-            <div class="stat-desc {% if current_balance > 0 %}text-error{% elif current_balance < 0 %}text-success{% endif %}">
-                {% if current_balance > 0 %}Owed by customer{% elif current_balance < 0 %}Customer has advance credit{% else %}Settled{% endif %}
+        <!-- Summary Stats -->
+        <div class="stats shadow mb-6 w-full">
+            <div class="stat">
+                <div class="stat-title">Total Credit Given</div>
+                <div class="stat-value text-error">Rs {{ total_debit|floatformat:2|intcomma }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-title">Total Cash Received</div>
+                <div class="stat-value text-success">Rs {{ total_credit|floatformat:2|intcomma }}</div>
+            </div>
+            <div class="stat">
+                <div class="stat-title">Current Outstanding Balance</div>
+                <div class="stat-value text-primary">Rs {{ current_balance|floatformat:2|intcomma }}</div>
             </div>
         </div>
     </div>
     
-    <!-- Action Button -->
-    <div class="mb-6">
+    <!-- ================ 3. MODIFIED THIS: ACTION BUTTONS ================ -->
+    <div class="mb-6 flex gap-2 non-printable">
         <label for="receive_cash_modal_checkbox" class="btn btn-success">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
              Receive Cash Payment
         </label>
+        <button onclick="window.print()" class="btn btn-outline">Print Ledger</button>
     </div>
 
-    <!-- Ledger Table -->
-    <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg">
+    <!-- Ledger Table (also wrapped as printable) -->
+    <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg printable-section">
         <table class="table table-sm w-full">
             <thead>
                 <tr>
@@ -61,8 +71,7 @@
                     <th>Notes / Source</th>
                     <th class="debit-col">Debit (Owed)</th>
                     <th class="credit-col">Credit (Paid)</th>
-                    {# Running balance column can be added later #}
-                    <th class="text-center">Actions</th>
+                    <th class="text-center non-printable">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,11 +86,11 @@
                             {{ entry.notes|default:""|truncatechars:40 }}
                         {% endif %}
                     </td>
-                    <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2 }}{% endif %}</td>
-                    <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2 }}{% endif %}</td>
-                     <td class="text-center space-x-1">
+                    <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
+                    <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>
+                    <td class="text-center space-x-1 non-printable">
                         <button type="button" class="btn btn-xs btn-outline btn-info open-edit-tx-modal-btn" data-tx-pk="{{ entry.pk }}">Edit</button>
-                        {% if not entry.source_sale %} {# Only allow deleting non-sale entries #}
+                        {% if not entry.source_sale %}
                             <button type="button" class="btn btn-xs btn-outline btn-error open-delete-tx-modal-btn" data-tx-pk="{{ entry.pk }}" data-tx-info="{{entry.get_transaction_type_display}} of Rs {{entry.debit_amount|add:entry.credit_amount}}">Delete</button>
                         {% endif %}
                     </td>
@@ -95,18 +104,19 @@
         </table>
     </div>
 
-    <!-- MODALS for Receive Cash, Edit, and Delete -->
-    {# We will include them as partials, just like for the shop ledger #}
-    {% include 'accounts/partials/receive_cash_modal_manual_customer.html' %}
-    {% include 'accounts/partials/edit_transaction_modal.html' %}
-    {% include 'accounts/partials/delete_transaction_modal.html' %}
-
+    <!-- MODALS (placed outside printable area) -->
+    <div class="non-printable">
+        {% include 'accounts/partials/receive_cash_modal_manual_customer.html' %}
+        {% include 'accounts/partials/edit_transaction_modal.html' %}
+        {% include 'accounts/partials/delete_transaction_modal.html' %}
+    </div>
 </div>
 {% endblock %}
 
 
 {% block extra_scripts %}
 {{ block.super }}
+<!-- All your existing JavaScript for modals is preserved and does not need to be changed -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // --- Get Current Page URL for Redirects ---
@@ -207,7 +217,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
 
     // --- Delete Transaction Modal ---
     const deleteTxModalCheckbox = document.getElementById('delete_tx_modal_checkbox');

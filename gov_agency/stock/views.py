@@ -27,6 +27,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font
 from expense.models import Expense
 from django.db.models.functions import TruncDate,TruncMonth
+from collections import defaultdict
 
 
 
@@ -654,18 +655,44 @@ def update_note(request):
 
 @login_required
 def pending_deliveries_view(request):
-    pending_sales_transactions = SalesTransaction.objects.filter(
-        user=request.user, # Transactions processed by this user
-        status=SalesTransaction.SALE_STATUS_CHOICES[1][0] # 'PENDING_DELIVERY'
+    """
+    UPDATED: This view now also calculates a consolidated "Loading Sheet" for each
+    vehicle with pending deliveries.
+    """
+    # Get all pending transactions for the user, ordered by vehicle
+    pending_transactions = SalesTransaction.objects.filter(
+        user=request.user,
+        status='PENDING_DELIVERY',
+        assigned_vehicle__isnull=False # Only consider sales with an assigned vehicle
     ).select_related(
-        'customer_shop', 
-        'assigned_vehicle'
-    ).prefetch_related( # To get items and their product details efficiently
-        'items__product_detail_snapshot__product_base' 
-    ).order_by('transaction_time') # Oldest pending first
+        'customer_shop', 'assigned_vehicle'
+    ).prefetch_related(
+        'items__product_detail_snapshot__product_base'
+    ).order_by('assigned_vehicle__vehicle_number', 'transaction_time')
+
+    # --- NEW AGGREGATION LOGIC ---
+    # We will build a dictionary to hold the loading sheet for each vehicle.
+    # The structure will be: {vehicle_object: {product_detail_object: total_quantity}}
+    vehicle_loading_sheets = defaultdict(lambda: defaultdict(Decimal))
+
+    for tx in pending_transactions:
+        vehicle = tx.assigned_vehicle
+        for item in tx.items.all():
+            product_detail = item.product_detail_snapshot
+            # Add the item's quantity to the running total for that product on that vehicle
+            vehicle_loading_sheets[vehicle][product_detail] += item.quantity_sold_decimal
+    
+    # Convert the nested defaultdict to a regular dict with a sorted list of items for the template
+    # The final structure will be: {vehicle_object: [ (product_detail, total_quantity), ... ]}
+    final_loading_sheets = {}
+    for vehicle, product_quantities in vehicle_loading_sheets.items():
+        # Sort items by product name for a clean printout
+        sorted_items = sorted(product_quantities.items(), key=lambda x: x[0].product_base.name)
+        final_loading_sheets[vehicle] = sorted_items
 
     context = {
-        'pending_transactions': pending_sales_transactions, # Changed context variable name
+        'pending_transactions': pending_transactions,
+        'loading_sheets': final_loading_sheets,
     }
     return render(request, 'stock/pending_deliveries.html', context)
 
