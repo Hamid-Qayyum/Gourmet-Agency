@@ -160,7 +160,7 @@ class CustomAccountTransaction(models.Model):
 
 class DailySummary(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="daily_summaries")
-    summary_date = models.DateField(unique=True, help_text="The specific date this summary represents.")
+    summary_date = models.DateField(help_text="The specific date this summary represents.")
     
     # --- REPORTING METRICS (Value of business done) ---
     total_revenue = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))

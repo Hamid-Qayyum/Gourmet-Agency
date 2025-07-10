@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'claim.apps.ClaimConfig',
     'expense.apps.ExpenseConfig', 
     'dashboard.apps.DashboardConfig',
+    'gov_agency',
 ]
 
 MIDDLEWARE = [

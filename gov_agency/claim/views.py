@@ -11,6 +11,7 @@ from django.urls import reverse
 from stock.models import Vehicle, ProductDetail
 from .models import Claim,ClaimItem
 from .forms import FinalizeClaimForm,AddClaimItemForm
+from   gov_agency.decorators import admin_mode_required
 
 
 @login_required
@@ -200,6 +201,7 @@ def process_pending_claims_view(request):
 
 
 @login_required
+@admin_mode_required
 def delete_claim_view(request, claim_pk):
     """
     UPDATED: Deletes a Claim and its items. Now handles POST requests
@@ -279,6 +281,7 @@ def reverse_completed_claim_view(request, claim_pk):
 
 
 @login_required
+@admin_mode_required
 @transaction.atomic # Ensure all operations succeed or fail together
 def edit_claim_view(request, claim_pk):
     """

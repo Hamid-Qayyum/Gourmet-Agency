@@ -28,13 +28,7 @@ from openpyxl.styles import Font
 from expense.models import Expense
 from django.db.models.functions import TruncDate,TruncMonth
 from collections import defaultdict
-
-
-
-
-
-
-
+from gov_agency.decorators import admin_mode_required
 
 
 
@@ -43,22 +37,27 @@ from collections import defaultdict
 # login view.........
 def user_login(request):
     if request.method == 'POST':
+        print("inside")
         email = request.POST.get("email")
         password = request.POST.get("password")
         user = authenticate(email=email, password=password)
         if user is not None:
-            login(request,user)
-            return redirect('/dashboard')
+            login(request, user)
+            print("success............................................................")
+            return redirect('dashboard:main_dashboard')  # Your custom dashboard view
+        else:
+            print("authantication is failed...............................................")
     return render(request, 'registration/login.html')
             
 # sign up view ............
 def register_user(request):
+    print("inside custom register view..................")
     if request.method == 'POST':
         form = RegisterForm(request.POST)
         if form.is_valid():
             user = form.save()
             login(request,user)
-            return redirect('/dashboard')
+            return redirect('dashboard:main_dashboard')
     else:
         form = RegisterForm()    
     return render(request, 'registration/sign_up.html', {'form': form})
@@ -97,6 +96,7 @@ def create_product(request):
     return render(request, 'stock/create_product.html', context)
 
 @login_required
+@admin_mode_required
 def confirm_delete_product_view(request, product_id):
     product = get_object_or_404(AddProduct, id=product_id, user=request.user) # Ensure user ownership
     context = {
@@ -106,6 +106,7 @@ def confirm_delete_product_view(request, product_id):
 
 
 @login_required
+@admin_mode_required
 def delete_product_view(request, product_id):
     product_to_delete = get_object_or_404(AddProduct, id=product_id, user=request.user)
     if request.method == 'POST':
@@ -166,6 +167,7 @@ def add_product_details(request):
 
 
 @login_required
+@admin_mode_required
 def product_detail_delete_selected_view(request):
     if request.method == 'POST':
         selected_ids = request.POST.getlist('selected_details_ids')
@@ -187,6 +189,7 @@ def product_detail_delete_selected_view(request):
     return redirect('stock:add_product_details')
 
 @login_required
+@admin_mode_required
 def product_detail_update_view(request, pk):
     instance  = get_object_or_404(ProductDetail, pk=pk, user=request.user)
     if request.method == 'POST':
@@ -825,6 +828,7 @@ def process_delivery_return_view(request, sale_pk):
 
 
 @login_required
+@admin_mode_required
 def sales_report_view(request):
     today = timezone.localdate()
     # ... (date range setup: start_of_today_dt, end_of_today_dt, etc. - as before) ...

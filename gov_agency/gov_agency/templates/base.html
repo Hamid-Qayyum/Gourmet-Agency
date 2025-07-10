@@ -166,15 +166,14 @@
                                 <!-- The Dropdown Menu Content -->
                                 <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
                                     <!-- "Is Admin" Checkbox: Only shows for staff users and is disabled (informational) -->
-                                    
                                         <li class="p-2">
                                             <label class="label cursor-pointer p-0">
-                                                <span class="label-text font-semibold">Admin Status</span>
-                                                <input type="checkbox" class="toggle toggle-success" checked />
+                                                <span class="label-text font-semibold">Admin Mode</span>
+                                                <input type="checkbox" class="toggle toggle-primary" id="adminModeToggle" 
+                                                    {% if request.session.admin_mode_active %}checked{% endif %} />
                                             </label>
                                         </li>
                                         <div class="divider my-0"></div>
-                                    
                                     
                                     <!-- Logout Button -->
                                     <li><a href="{% url 'logout' %}" class="text-error font-semibold">Logout</a></li>
@@ -215,6 +214,36 @@
         </div>
     </div>
 
+     <!-- ================== START: NEW MODALS & HIDDEN FORM ================== -->
+    <!-- Password Entry Modal -->
+    <input type="checkbox" id="admin_password_modal" class="modal-toggle" />
+    <div class="modal" role="dialog">
+        <div class="modal-box">
+            <form method="post" action="{% url 'toggle_admin_mode' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="activate">
+                <h3 class="font-bold text-lg">Enter Admin Password</h3>
+                <div class="py-4">
+                    <input type="password" name="password" class="input input-bordered w-full" placeholder="Password" required autofocus/>
+                    <div class="text-right mt-2">
+                </div>
+                </div>
+                <div class="modal-action">
+                    <label for="admin_password_modal" class="btn btn-ghost">Cancel</label>
+                    <button type="submit" class="btn btn-primary">Activate</button>
+                </div>
+                <a href="{% url 'forgot_admin_password' %}" class="text-xs link link-hover text-info">Forgot Password?</a>
+            </form>
+        </div>
+        <label class="modal-backdrop" for="admin_password_modal">Close</label>
+    </div>
+
+    <!-- Deactivation Form (Hidden) -->
+    <form id="deactivateAdminModeForm" method="post" action="{% url 'toggle_admin_mode' %}" style="display: none;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="deactivate">
+    </form>
+    <!-- =================== END: NEW MODALS & HIDDEN FORM =================== -->
 
     {% block extra_scripts %}
     <script>
@@ -233,6 +262,37 @@
         });
     }
 });
+
+
+// ================== START: NEW ADMIN MODE JAVASCRIPT ==================
+    document.addEventListener('DOMContentLoaded', function() {
+        const adminToggle = document.getElementById('adminModeToggle');
+        const passwordModalCheckbox = document.getElementById('admin_password_modal');
+        const deactivateForm = document.getElementById('deactivateAdminModeForm');
+
+        if (adminToggle) {
+            adminToggle.addEventListener('change', function(e) {
+                // We use a timeout to allow the native toggle animation to finish
+                // before we potentially revert its state.
+                setTimeout(() => {
+                    if (this.checked && !e.target.dataset.programmaticChange) {
+                        // User tried to turn it ON.
+                        // 1. Revert the toggle visually because the form submission will truly set the state.
+                        this.checked = false; 
+                        // 2. Open the password modal.
+                        passwordModalCheckbox.checked = true;
+                    } else if (!this.checked && !e.target.dataset.programmaticChange) {
+                        // User tried to turn it OFF.
+                        // 1. Submit the hidden deactivation form.
+                        deactivateForm.submit();
+                    }
+                    // Reset the flag after handling
+                    delete e.target.dataset.programmaticChange;
+                }, 50); // A small delay
+            });
+        }
+    });
+    // =================== END: NEW ADMIN MODE JAVASCRIPT ===================
 </script>
     {% endblock %}
 </body>

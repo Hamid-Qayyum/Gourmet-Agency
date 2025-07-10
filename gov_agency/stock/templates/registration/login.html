@@ -20,7 +20,7 @@
   <div class="w-[400px] md:w-[460px] p-10 rounded-3xl glass-card shadow-xl text-white bg-neutral text-sm">
     <h2 class="text-center text-xl font-semibold tracking-widest mb-8 opacity-90">LOGIN</h2>
 
-    <form method="post">
+    <form method="post" action="{% url 'stock:login' %}">
       {% csrf_token %}
 
       <label class="form-control w-full mb-6">

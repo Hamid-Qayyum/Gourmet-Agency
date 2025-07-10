@@ -26,20 +26,20 @@ class AddProduct(models.Model):
 class ProductDetail(models.Model):
     product_base = models.ForeignKey(AddProduct, null=False, blank=False, on_delete=models.CASCADE, related_name="details")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="product_details_created")
-    packing_type = models.CharField(max_length=100,null=False, blank=False, help_text="e.g., Bottle, Box, Carton, PET Jar", default="Carton")
+    packing_type = models.CharField(max_length=100,null=False, blank=False, help_text="e.g., Bottle, Box, Carton, PET", default="Carton")
 
     quantity_in_packing = models.DecimalField(max_digits=10,null=False, blank=False, decimal_places=2 ,validators=[MinValueValidator(0.01)],
-    help_text="e.g., 1 (for 1 liter bottle), 0.5 (for 500ml), 12 (for a dozen items)")
+    help_text="e.g., 1 (for 1 liter bottle), 0.5 (for 500ml)")
 
-    unit_of_measure = models.CharField(max_length=50,null=False, blank=False, help_text="e.g., kg, liter, pieces, meters", default="liter")
+    unit_of_measure = models.CharField(max_length=50,null=False, blank=False, help_text="e.g., kg, liter, pieces, ML", default="ML")
 
     items_per_master_unit = models.PositiveIntegerField(validators=[MinValueValidator(1)],null=False, blank=False,
-    help_text="e.g., Number of bottles per PET/Carton, or items per box.")
+    help_text="e.g., Number of bottles per Carton/Pet")
 
     price_per_item = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, validators=[MinValueValidator(0.01)],
     help_text="Price for one individual item (e.g., one bottle, one piece).")
 
-    stock = models.DecimalField(max_digits=10,decimal_places=2  , blank=False, null=False,default=0.00, validators=[MinValueValidator(0.01)])
+    stock = models.DecimalField(max_digits=10,decimal_places=2  ,blank=False, null=False, validators=[MinValueValidator(0.01)],help_text="e.g. 100.00 for 100,")
     expirey_date = models.DateField(blank=False, null=False, default=date.today() + timedelta(days=30))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
