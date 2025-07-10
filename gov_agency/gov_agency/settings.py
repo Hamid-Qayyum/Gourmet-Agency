@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'claim.apps.ClaimConfig',
     'expense.apps.ExpenseConfig', 
+    'dashboard.apps.DashboardConfig',
 ]
 
 MIDDLEWARE = [

@@ -8,8 +8,6 @@ from django.conf.urls.static import static
 app_name = 'stock'
 
 urlpatterns = [
-   path('',views.dashboard, name='dashboard'),
-   path('dashboard',views.dashboard, name='dashboard'),
 
    # views about creating products.......
    path('create_product/',views.create_product, name='create_product'),

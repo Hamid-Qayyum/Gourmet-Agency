@@ -63,13 +63,6 @@ def register_user(request):
         form = RegisterForm()    
     return render(request, 'registration/sign_up.html', {'form': form})
 
-# dashboard view .......................................................................................................
-@login_required
-def dashboard(request):
-    print("dashbord")
-    messages.success(request, "hello dashboard")
-    print("checking")
-    return render(request,'stock/admin_dashboard.html')
 
 
 # add product view .......................................................................................................
