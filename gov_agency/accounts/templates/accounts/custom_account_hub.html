@@ -6,9 +6,13 @@
 
 {% block content %}
 <div class="p-4 md:p-6">
+    
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">Custom Ledger Accounts</h1>
-        <label for="add_account_modal_checkbox" class="btn btn-primary">Create New Account</label>
+        <div>
+        <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0 non-printable">← Back to Hub</a>
+        <label for="add_account_modal_checkbox" class="btn btn-sm btn-primary">Create New Account</label>
+        </div>
     </div>
 
     <!-- Grid of Custom Account Cards -->

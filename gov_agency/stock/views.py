@@ -1245,15 +1245,26 @@ def performance_summary_hub_view(request):
     return render(request, 'stock/performance_summary_hub.html', context)
 
 
+# stock/views.py
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Case, When
+from django.db.models.functions import TruncDate, TruncMonth
+from decimal import Decimal
+
+# Import your models
+from .models import Vehicle, SalesTransaction, SalesTransactionItem
+
+# ... your other views ...
+
 @login_required
 def group_performance_summary_view(request, vehicle_pk=None):
     """
-    Calculates and displays daily and monthly sales totals for a specific
-    vehicle or for the store (sales with no vehicle).
+    UPDATED: Calculates and displays daily and monthly sales totals for revenue
+    and the NET quantity sold (dispatched - returned), grouped by packaging.
     """
     user = request.user
     
-    # Filter the base queryset based on the selected group
     if vehicle_pk:
         grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk, user=user)
         grouping_name = f"Performance Summary for: {grouping_object.vehicle_number}"
@@ -1263,26 +1274,68 @@ def group_performance_summary_view(request, vehicle_pk=None):
         grouping_name = "Performance Summary for: Store"
         base_query = SalesTransaction.objects.filter(user=user, assigned_vehicle__isnull=True)
 
-    # --- Daily Sales Calculation ---
-    # Group transactions by day and sum the revenue for each day
-    daily_summary = base_query.annotate(
+    # --- Daily Summary Calculation ---
+    daily_revenue_summary = list(base_query.annotate(
         day=TruncDate('transaction_time')
     ).values('day').annotate(
         total_revenue=Sum('grand_total_revenue')
-    ).order_by('-day')
+    ).order_by('-day'))
 
-    # --- Monthly Sales Calculation ---
-    # Group transactions by month and sum the revenue for each month
-    monthly_summary = base_query.annotate(
+    for entry in daily_revenue_summary:
+        day = entry['day']
+        
+        # --- NEW: Aggregation to calculate NET quantity sold ---
+        quantity_breakdown = SalesTransactionItem.objects.filter(
+            transaction__in=base_query,
+            transaction__transaction_time__date=day
+        ).values(
+            'product_detail_snapshot__quantity_in_packing',
+            'product_detail_snapshot__unit_of_measure'
+        ).annotate(
+            # Sum the dispatched quantity and the returned quantity separately
+            total_dispatched=Sum('quantity_sold_decimal'),
+            total_returned=Sum('returned_quantity_decimal'),
+            # Calculate the net quantity sold
+            actual_sold=ExpressionWrapper(
+                F('total_dispatched') - F('total_returned'),
+                output_field=DecimalField()
+            )
+        ).order_by('-actual_sold')
+        
+        entry['quantity_breakdown'] = list(quantity_breakdown)
+
+    # --- Monthly Summary Calculation (with the same new logic) ---
+    monthly_revenue_summary = list(base_query.annotate(
         month=TruncMonth('transaction_time')
     ).values('month').annotate(
         total_revenue=Sum('grand_total_revenue')
-    ).order_by('-month')
+    ).order_by('-month'))
+
+    for entry in monthly_revenue_summary:
+        month = entry['month']
+        
+        quantity_breakdown = SalesTransactionItem.objects.filter(
+            transaction__in=base_query,
+            transaction__transaction_time__year=month.year,
+            transaction__transaction_time__month=month.month
+        ).values(
+            'product_detail_snapshot__quantity_in_packing',
+            'product_detail_snapshot__unit_of_measure'
+        ).annotate(
+            total_dispatched=Sum('quantity_sold_decimal'),
+            total_returned=Sum('returned_quantity_decimal'),
+            actual_sold=ExpressionWrapper(
+                F('total_dispatched') - F('total_returned'),
+                output_field=DecimalField()
+            )
+        ).order_by('-actual_sold')
+        
+        entry['quantity_breakdown'] = list(quantity_breakdown)
 
     context = {
         'grouping_name': grouping_name,
-        'daily_summary': daily_summary,
-        'monthly_summary': monthly_summary,
+        'daily_summary': daily_revenue_summary,
+        'monthly_summary': monthly_revenue_summary,
     }
     return render(request, 'stock/group_performance_summary.html', context)
 

@@ -4,42 +4,47 @@
 {% block title %}Dashboard{% endblock %}
 {% block page_title %}Main Dashboard{% endblock %}
 
+{% block extra_head %}
+{{ block.super }}
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="p-4 md:p-6 space-y-8">
 
     <!-- Section 1: Key Performance Indicators (KPIs) -->
     <div>
         <h2 class="text-xl font-bold mb-4">At a Glance</h2>
-        <!-- Using 'stats' component for a more compact and aligned look -->
         <div class="stats shadow w-full">
+            
             <div class="stat">
                 <div class="stat-figure text-secondary">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 </div>
                 <div class="stat-title">Pending Deliveries</div>
                 <div class="stat-value text-secondary">{{ pending_deliveries_count|intcomma }}</div>
-                <div class="stat-desc">Sales awaiting processing</div>
+                <div class="stat-desc">Sales to be processed</div>
             </div>
             
             <div class="stat">
                 <div class="stat-figure text-error">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
                 </div>
                 <div class="stat-title">Total Receivables</div>
                 <div class="stat-value text-error">Rs {{ total_receivables|floatformat:2|intcomma }}</div>
-                <div class="stat-desc">Total outstanding balance</div>
+                <div class="stat-desc">Outstanding from customers</div>
             </div>
             
             <div class="stat">
                 <div class="stat-figure text-warning">
-                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                 </div>
                 <div class="stat-title">Pending Claims</div>
                 <div class="stat-value">{{ pending_claims_count|intcomma }}</div>
                 <div class="stat-desc">Awaiting stock adjustment</div>
             </div>
 
-            <!-- Integrated To-Do List Card -->
             <a href="{% url 'dashboard:note_list' %}" class="stat hover:bg-base-200 transition-colors">
                 <div class="stat-figure text-accent">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
@@ -53,33 +58,261 @@
 
     <!-- Section 2: Quick Navigation -->
     <div>
-        <h2 class="text-xl font-bold mb-4">Quick Navigation</h2>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">Quick Navigation</h2>
+        </div>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <!-- Card Link: Point of Sale -->
-            <a href="{% url 'stock:sales' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow text-center p-4 border border-base-300">
-                <div class="text-primary text-4xl mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg></div>
+
+            <a href="{% url 'stock:sales' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow p-4 border border-base-300 flex flex-col items-center justify-center text-center">
+                <div class="text-primary mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
                 <p class="font-semibold">Point of Sale</p>
             </a>
-            <!-- Card Link: Ledgers Hub -->
-             <a href="{% url 'accounts:transactions_hub' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow text-center p-4 border border-base-300">
-                <div class="text-accent text-4xl mx-auto mb-2">
+
+            <a href="{% url 'accounts:transactions_hub' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow p-4 border border-base-300 flex flex-col items-center justify-center text-center">
+                <div class="text-accent mb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-10 w-10">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
                     </svg>
                 </div>
                 <p class="font-semibold">Ledgers Hub</p>
             </a>
-            <!-- Card Link: Claims Hub -->
-            <a href="{% url 'claim:claims_hub' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow text-center p-4 border border-base-300">
-                <div class="text-info text-4xl mx-auto mb-2">
+
+            <a href="{% url 'claim:claims_hub' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow p-4 border border-base-300 flex flex-col items-center justify-center text-center">
+                <div class="text-info mb-2">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-10 w-10">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
                     </svg>
                 </div>
                 <p class="font-semibold">Claims Hub</p>
             </a>
-            <!-- You can add more links here as needed -->
+
+            <a href="{% url 'stock:performance_summary_hub' %}" class="card bg-base-100 shadow hover:shadow-lg transition-shadow p-4 border border-base-300 flex flex-col items-center justify-center text-center">
+                <div class="text-success mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-10 w-10">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                    </svg>
+                </div>
+                <p class="font-semibold">Performance</p>
+            </a>
+
+
+
+            <div class="card bg-base-100 shadow hover:shadow-lg transition-shadow p-4 border border-base-300">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2"> 
+                    Stock Management
+                </h2>
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- Create Product -->
+                    <a href="{% url 'stock:create_product' %}" class="bg-base-200 hover:bg-base-300 rounded-lg p-2 flex flex-col items-center text-center shadow transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mb-1 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span class="text-xs font-small">Create</span>
+                    </a>
+
+                    <!-- Product Details -->
+                    <a href="{% url 'stock:add_product_details' %}" class="bg-base-200 hover:bg-base-300 rounded-lg p-2 flex flex-col items-center text-center shadow transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mb-1 text-secondary" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                        </svg>
+                        <span class="text-xs font-small">Details</span>
+                    </a>
+
+                    <!-- Vehicles -->
+                    <a href="{% url 'stock:manage_vehicles' %}" class="bg-base-200 hover:bg-base-300 rounded-lg p-2 flex flex-col items-center text-center shadow transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mb-1 text-accent" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round"d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
+                        </svg>
+                        <span class="text-xs font-small">Vehicles</span>
+                    </a>
+
+                    <!-- Shops -->
+                    <a href="{% url 'stock:manage_shops' %}" class="bg-base-200 hover:bg-base-300 rounded-lg p-2 flex flex-col items-center text-center shadow transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mb-1 text-info" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                        </svg>
+                        <span class="text-xs font-small">Shops</span>
+                    </a>
+            </div>
         </div>
     </div>
+
+    </div>
+
+    </div>
+
+    <!-- Section 3: Data Summaries -->
+    <div>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">Data Summaries</h2>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="card bg-base-100 shadow-xl border">
+                <div class="card-body">
+                    <div class="flex justify-between">
+                        <h2 class="card-title">This Month's Sales Target</h2>
+                        <label for="set_target_modal"
+                            class="relative inline-flex items-center uppercase tracking-widest text-black text-sm px-3 py-2 transition-transform duration-300 hover:scale-[1.02] active:scale-95 group cursor-pointer">
+                        Set Monthly Target
+                        <span class="absolute bottom-0 left-0 w-full h-[2px] bg-black scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-bottom-right group-hover:origin-bottom-left"></span>
+                        </label>                    
+                    </div>
+                    <p class="text-sm">
+                        {{ quantity_sold_this_month|floatformat:"-2g"|intcomma }} / 
+                        {{ sales_target|floatformat:"-2g"|intcomma }} Units
+                    </p>               
+                    <div class="relative h-64 w-full mx-auto"><canvas id="salesTargetDonutChart"></canvas></div>
+                </div>
+            </div>
+            <div class="card bg-base-100 shadow-xl border">
+                <div class="card-body">
+                    <h2 class="card-title">Stock Composition by Packaging</h2>
+                    <div class="relative h-64 w-full mx-auto"><canvas id="stockPieChart"></canvas></div>
+                </div>
+            </div>
+            <div class="card bg-base-100 shadow-xl border lg:col-span-2">
+                <div class="card-body">
+                    <h2 class="card-title">Overall Stock Summary</h2>
+                    <div class="overflow-x-auto">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Packaging Type</th>
+                                    <th class="text-right">Total Stock (Master Units)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for summary_item in stock_summary %}
+                                <tr class="hover">
+                                    <td>{{ summary_item.quantity_in_packing|floatformat:"-2g" }} {{ summary_item.unit_of_measure }}</td>
+                                    <td class="text-right font-semibold">{{ summary_item.total_stock|floatformat:"-2g"|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="2" class="text-center py-4 text-base-content/70">No stock available.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+<!-- Modal for Setting Sales Target -->
+<input type="checkbox" id="set_target_modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+    <div class="modal-box">
+        <form method="post" action="{% url 'dashboard:main_dashboard' %}">
+            {% csrf_token %}
+            <h3 class="font-bold text-lg">Set a Sales Target for a Month</h3>
+            <div class="py-4 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Month</span></label>
+                        {{ target_form.month }}
+                    </div>
+                    <div class="form-control">
+                        <label class="label"><span class="label-text">Year</span></label>
+                        {{ target_form.year }}
+                    </div>
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Target Quantity (e.g., Cartons)</span></label>
+                    {{ target_form.target_quantity }}
+                </div>
+                {% if target_form.target_quantity.errors %}<p class="text-error text-xs mt-1">{{ target_form.target_quantity.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div class="modal-action">
+                <label for="set_target_modal" class="btn btn-ghost">Cancel</label>
+                <button type="submit" class="btn btn-primary">Save Target</button>
+            </div>
+        </form>
+    </div>
+    <label class="modal-backdrop" for="set_target_modal">Close</label>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Plugin for showing % in center of doughnut chart
+    const doughnutLabel = {
+        id: 'doughnutLabel',
+        beforeDatasetsDraw(chart, args, pluginOptions) {
+            const { ctx } = chart;
+            const text = pluginOptions.text || '0%';
+            ctx.save();
+            const meta = chart.getDatasetMeta(0);
+            if (meta.data.length === 0) return;
+
+            const x = meta.data[0].x;
+            const y = meta.data[0].y;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText(text, x, y);
+        }
+    };
+
+    // --- Doughnut Chart for Sales Target ---
+    const salesTargetCtx = document.getElementById('salesTargetDonutChart');
+    if (salesTargetCtx) {
+        new Chart(salesTargetCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ sales_target_labels|safe }},
+                datasets: [{
+                    data: {{ sales_target_data|safe }},
+                    backgroundColor: ['#22c55e', '#e5e7eb'],  // green-500 and gray-200
+                    borderColor: ['#22c55e', '#e5e7eb'],
+                    borderWidth: 1,
+                    cutout: '70%'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    doughnutLabel: { text: '{{ achieved_percentage }}%' }
+                }
+            },
+            plugins: [doughnutLabel]
+        });
+    }
+
+    // --- Pie Chart for Stock Composition ---
+    const stockPieCtx = document.getElementById('stockPieChart');
+    if (stockPieCtx) {
+        new Chart(stockPieCtx, {
+            type: 'pie',
+            data: {
+                labels: {{ stock_chart_labels|safe }},
+                datasets: [{
+                    data: {{ stock_chart_data|safe }},
+                    backgroundColor: [
+                        '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                        '#0ea5e9', '#f472b6', '#a3e635', '#14b8a6', '#f87171'
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

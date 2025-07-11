@@ -7,44 +7,101 @@ import json
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from django.contrib import messages
-
+from django.utils import timezone
+from datetime import timedelta
+import datetime
 # Import models from your other apps
-from .models import Note
-from .forms import NoteForm
-from stock.models import SalesTransaction,Shop
+from .models import Note,MonthlySalesTarget
+from .forms import NoteForm,SalesTargetForm
+from stock.models import SalesTransaction,Shop,ProductDetail,SalesTransactionItem
 from accounts.models import CustomAccount
 from claim.models import Claim
 
 @login_required
 def dashboard_view(request):
     user = request.user
+    today = timezone.localdate()
+    start_of_current_month = today.replace(day=1)
 
-    # Stock & Sales Metrics
+    if request.method == 'POST':
+        target_form = SalesTargetForm(request.POST)
+        if target_form.is_valid():
+            data = target_form.cleaned_data
+            target_date = datetime.date(int(data['year']), int(data['month']), 1)
+            MonthlySalesTarget.objects.update_or_create(
+                user=user,
+                month=target_date,
+                defaults={'target_quantity': data['target_quantity']}
+            )
+            messages.success(request, f"Sales target for {target_date.strftime('%B %Y')} has been set.")
+            return redirect('dashboard:main_dashboard')
+    else:
+        target_form = SalesTargetForm(initial={'month': today.month, 'year': today.year})
+
+    # --- KPIs and Summaries ---
     pending_deliveries_count = SalesTransaction.objects.filter(user=user, status='PENDING_DELIVERY').count()
     incomplete_notes_count = Note.objects.filter(user=request.user, is_completed=False).count()
 
-    # Accounts & Financial Metrics
-    # Fetch all shops and custom accounts for the user
+    stock_summary = ProductDetail.objects.filter(
+        user=user, stock__gt=Decimal('0.00')
+    ).values('quantity_in_packing', 'unit_of_measure').annotate(total_stock=Sum('stock')).order_by('unit_of_measure', '-total_stock')
+
+    stock_chart_labels = []
+    stock_chart_data = []
+    for item in stock_summary:
+        # Correct Python formatting
+        label = f"{format(item['quantity_in_packing'], 'g')} {item['unit_of_measure']}"
+        stock_chart_labels.append(label)
+        stock_chart_data.append(float(item['total_stock']))
+    
     all_shops = Shop.objects.filter(user=user)
     all_custom_accounts = CustomAccount.objects.filter(user=user)
-
-    # Calculate the total balance by looping in Python
     total_shop_balance = sum(shop.current_balance for shop in all_shops)
     total_custom_balance = sum(account.current_balance for account in all_custom_accounts)
-    
     total_receivables = total_shop_balance + total_custom_balance
     
-    # Claim Metrics
     pending_claims_count = Claim.objects.filter(user=user, status='AWAITING_PROCESSING').count()
 
+    # --- Sales Target Logic ---
+    current_target_obj = MonthlySalesTarget.objects.filter(user=user, month=start_of_current_month).first()
+    sales_target = current_target_obj.target_quantity if current_target_obj else Decimal('1000.00')
+
+    net_sales_aggregation = SalesTransactionItem.objects.filter(
+        transaction__user=user, 
+        transaction__transaction_time__gte=start_of_current_month
+    ).aggregate(
+        total_dispatched=Sum('quantity_sold_decimal'),
+        total_returned=Sum('returned_quantity_decimal')
+    )
+    
+    total_dispatched = net_sales_aggregation['total_dispatched'] or Decimal('0.00')
+    total_returned = net_sales_aggregation['total_returned'] or Decimal('0.00')
+    quantity_sold_this_month = total_dispatched - total_returned
+
+    remaining_to_target = max(Decimal('0.00'), sales_target - quantity_sold_this_month)
+    sales_target_data = [float(quantity_sold_this_month), float(remaining_to_target)]
+    sales_target_labels = ['Achieved', 'Remaining']
+    
+    achieved_percentage = 0
+    if sales_target > 0:
+        achieved_percentage = round((quantity_sold_this_month / sales_target) * 100)
+    
     context = {
         'pending_deliveries_count': pending_deliveries_count,
         'total_receivables': total_receivables,
         'pending_claims_count': pending_claims_count,
         'incomplete_notes_count': incomplete_notes_count,
-
+        'stock_summary' : stock_summary,
+        'stock_chart_labels': json.dumps(stock_chart_labels),
+        'stock_chart_data': json.dumps(stock_chart_data),
+        'sales_target': sales_target,
+        'target_form': target_form,
+        'quantity_sold_this_month': quantity_sold_this_month,
+        'sales_target_labels': json.dumps(sales_target_labels),
+        'sales_target_data': json.dumps(sales_target_data),
+        'achieved_percentage': achieved_percentage,
     }
-    return render(request,'dashboard/dashboard.html', context)
+    return render(request, 'dashboard/dashboard.html', context)
 
 
 

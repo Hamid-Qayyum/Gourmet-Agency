@@ -20,7 +20,10 @@ class EnterAdminPasswordForm(forms.Form):
 class SecurityAnswerForm(forms.Form):
     security_answer = forms.CharField(
         label="Your Answer",
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full', 'autofocus': True})
+        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full',
+                                       'autofocus': True,
+                                        'autocomplete': 'off',
+                                })
     )
 
 class ResetAdminPasswordForm(forms.Form):

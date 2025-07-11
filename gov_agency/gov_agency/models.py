@@ -1,12 +1,15 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password, check_password
+from decimal import Decimal
+
 
 class AdminProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='admin_profile')
     admin_password_hash = models.CharField(max_length=128, blank=True, null=True)
     security_question = models.CharField(max_length=255, blank=True, null=True)
     security_answer_hash = models.CharField(max_length=128, blank=True, null=True)
+
 
     def set_password(self, raw_password):
         self.admin_password_hash = make_password(raw_password)

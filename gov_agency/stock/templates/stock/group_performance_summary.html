@@ -6,35 +6,49 @@
 
 {% block content %}
 <div class="p-4 md:p-6">
-        <!-- Monthly Summary Card -->
-        <div class="card bg-base-100 shadow-xl flex">
+    <div class="flex justify-end mb-6">
+        <a href="{% url 'stock:performance_summary_hub' %}" class="btn btn-sm btn-outline">← Back to Group Selection</a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Daily Summary Card -->
+        <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
-
-                <div class="flex justify-between">
-                <h2 class="card-title">Monthly Sales Totals</h2>
-
-                <div class="flex justify-end mb-6 gap-2">
-                    <a href="{% url 'stock:sales_by_group_hub' %}" class="btn btn-sm btn-success">Sales by Group</a>
-                    <a href="{% url 'stock:performance_summary_hub' %}" class="btn btn-sm btn-outline">← Back to Group Selection</a>
-                </div>
-            </div>       
-                <div class="overflow-x-auto max-h-96 mt-4">
+                <h2 class="card-title">Daily Sales Summary</h2>
+                <div class="overflow-x-auto max-h-[40rem] mt-4">
                     <table class="table table-sm w-full">
                         <thead>
                             <tr>
-                                <th>Month</th>
+                                <th>Date & Net Quantity Breakdown</th> <!-- Title updated -->
                                 <th class="text-right">Total Revenue</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for entry in monthly_summary %}
+                            {% for entry in daily_summary %}
                                 <tr class="hover">
-                                    <td>{{ entry.month|date:"F Y" }}</td>
-                                    <td class="text-right font-semibold">Rs {{ entry.total_revenue|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        <div class="font-semibold">{{ entry.day|date:"l, F j, Y" }}</div>
+                                        <ul class="text-xs text-base-content/70 list-disc list-inside ml-4 mt-1">
+                                            {% for breakdown in entry.quantity_breakdown %}
+                                                <!-- Only show items that were actually sold -->
+                                                {% if breakdown.actual_sold > 0 %}
+                                                <li>
+                                                    <!-- USE THE NEW 'actual_sold' VALUE -->
+                                                    <strong>{{ breakdown.actual_sold|floatformat:"-2g" }}</strong> x 
+                                                    {{ breakdown.product_detail_snapshot__quantity_in_packing|floatformat:"-2g" }}
+                                                    {{ breakdown.product_detail_snapshot__unit_of_measure }}
+                                                </li>
+                                                {% endif %}
+                                            {% empty %}
+                                                <li class="list-none italic">No items sold.</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </td>
+                                    <td class="text-right font-semibold align-top pt-2">Rs {{ entry.total_revenue|floatformat:2|intcomma }}</td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="2" class="text-center py-4 text-base-content/70">No monthly sales recorded for this group.</td>
+                                    <td colspan="2" class="text-center py-4 text-base-content/70">No daily sales recorded for this group.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -42,31 +56,43 @@
                 </div>
             </div>
         </div>
-        <div>
-            
-        <div class="divider"></div>
 
-        <!-- Daily Summary Card -->
+        <!-- Monthly Summary Card (with the same changes) -->
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
-                <h2 class="card-title">Daily Sales Totals</h2>
-                <div class="overflow-x-auto max-h-96 mt-4">
+                <h2 class="card-title">Monthly Sales Summary</h2>
+                <div class="overflow-x-auto max-h-[40rem] mt-4">
                     <table class="table table-sm w-full">
                         <thead>
                             <tr>
-                                <th>Date</th>
+                                <th>Month & Net Quantity Breakdown</th> <!-- Title updated -->
                                 <th class="text-right">Total Revenue</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for entry in daily_summary %}
+                            {% for entry in monthly_summary %}
                                 <tr class="hover">
-                                    <td>{{ entry.day|date:"l, F j, Y" }}</td>
-                                    <td class="text-right font-semibold">Rs {{ entry.total_revenue|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        <div class="font-semibold">{{ entry.month|date:"F Y" }}</div>
+                                        <ul class="text-xs text-base-content/70 list-disc list-inside ml-4 mt-1">
+                                             {% for breakdown in entry.quantity_breakdown %}
+                                                {% if breakdown.actual_sold > 0 %}
+                                                <li>
+                                                    <strong>{{ breakdown.actual_sold|floatformat:"-2g" }}</strong> x 
+                                                    {{ breakdown.product_detail_snapshot__quantity_in_packing|floatformat:"-2g" }}
+                                                    {{ breakdown.product_detail_snapshot__unit_of_measure }}
+                                                </li>
+                                                {% endif %}
+                                            {% empty %}
+                                                <li class="list-none italic">No items sold.</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </td>
+                                    <td class="text-right font-semibold align-top pt-2">Rs {{ entry.total_revenue|floatformat:2|intcomma }}</td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="2" class="text-center py-4 text-base-content/70">No daily sales recorded for this group.</td>
+                                    <td colspan="2" class="text-center py-4 text-base-content/70">No monthly sales recorded for this group.</td>
                                 </tr>
                             {% endfor %}
                         </tbody>

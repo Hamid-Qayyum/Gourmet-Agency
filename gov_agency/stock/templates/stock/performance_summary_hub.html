@@ -8,16 +8,23 @@
 <div class="p-4 md:p-6">
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">Select a Group to View Performance</h1>
-    </div>
+        <a href="{% url 'stock:sales_by_group_hub' %}"
+            class="relative inline-flex items-center uppercase tracking-widest text-black text-sm px-3 py-2 transition-transform duration-300 hover:scale-[1.02] active:scale-95 group">
+            Sales By Vehicles
+            <span class="absolute top-[-12px] right-[-16px] text-xl group-hover:translate-x-1 transition-transform duration-300">
+                ⇝
+            </span>
+            <span class="absolute bottom-0 left-0 w-full h-[2px] bg-black scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-bottom-right group-hover:origin-bottom-left"></span>
+        </a>    
+        </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        <!-- Card for Store Summary -->
+        <!-- Card for Store Summary -->  
         <a href="{% url 'stock:store_performance_summary' %}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow border">
             <div class="card-body items-center text-center">
                 <h2 class="card-title text-primary">Store Performance</h2>
                 <p class="text-sm">View daily & monthly sales totals for the store.</p>
             </div>
         </a>
-
         <!-- Cards for each Vehicle -->
         {% for vehicle in vehicles %}
             <a href="{% url 'stock:vehicle_performance_summary' vehicle_pk=vehicle.pk %}" class="card bg-base-100 shadow-xl hover:shadow-2xl transition-shadow border">
