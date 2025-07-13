@@ -224,7 +224,7 @@
                 <input type="hidden" name="action" value="activate">
                 <h3 class="font-bold text-lg">Enter Admin Password</h3>
                 <div class="py-4">
-                    <input type="password" name="password" class="input input-bordered w-full" placeholder="Password" required autofocus/>
+                    <input id="adminPasswordInput" type="password" name="password" class="input input-bordered w-full" placeholder="Password" required autofocus/>
                     <div class="text-right mt-2">
                 </div>
                 </div>
@@ -269,6 +269,7 @@
         const adminToggle = document.getElementById('adminModeToggle');
         const passwordModalCheckbox = document.getElementById('admin_password_modal');
         const deactivateForm = document.getElementById('deactivateAdminModeForm');
+        const passwordInput = document.getElementById('adminPasswordInput');
 
         if (adminToggle) {
             adminToggle.addEventListener('change', function(e) {
@@ -281,6 +282,7 @@
                         this.checked = false; 
                         // 2. Open the password modal.
                         passwordModalCheckbox.checked = true;
+                        passwordInput.focus()
                     } else if (!this.checked && !e.target.dataset.programmaticChange) {
                         // User tried to turn it OFF.
                         // 1. Submit the hidden deactivation form.

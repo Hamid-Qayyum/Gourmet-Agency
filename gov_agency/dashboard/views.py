@@ -9,7 +9,9 @@ from django.http import JsonResponse
 from django.contrib import messages
 from django.utils import timezone
 from datetime import timedelta
-import datetime
+from django.utils.timezone import make_aware, datetime
+from datetime import date  # import date directly
+
 # Import models from your other apps
 from .models import Note,MonthlySalesTarget
 from .forms import NoteForm,SalesTargetForm
@@ -21,13 +23,13 @@ from claim.models import Claim
 def dashboard_view(request):
     user = request.user
     today = timezone.localdate()
-    start_of_current_month = today.replace(day=1)
+    start_of_current_month = make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
 
     if request.method == 'POST':
         target_form = SalesTargetForm(request.POST)
         if target_form.is_valid():
             data = target_form.cleaned_data
-            target_date = datetime.date(int(data['year']), int(data['month']), 1)
+            target_date = date(int(data['year']), int(data['month']), 1)
             MonthlySalesTarget.objects.update_or_create(
                 user=user,
                 month=target_date,

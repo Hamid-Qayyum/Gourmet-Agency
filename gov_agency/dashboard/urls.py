@@ -7,7 +7,7 @@ app_name = 'dashboard'
 
 urlpatterns = [
     path('dashboard', views.dashboard_view, name='main_dashboard'),
-
+    path('',views.dashboard_view, name='main_dashboard'),
     # notes..............
     path('notes/', views.note_list_view, name='note_list'),
     path('notes/create/', views.create_note_view, name='create_note'),

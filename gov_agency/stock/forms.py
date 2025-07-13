@@ -6,16 +6,52 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.forms import modelformset_factory
 from datetime import date, timedelta
-
+from gov_agency.models import AdminProfile
 
 
 
 class RegisterForm(UserCreationForm):
+    # --- ADD User's Personal Details ---
+    first_name = forms.CharField(max_length=150, required=True, widget=forms.TextInput(attrs={'placeholder': "Your First Name"}))
+    last_name = forms.CharField(max_length=150, required=True, widget=forms.TextInput(attrs={'placeholder': "Your Last Name"}))
     email = forms.EmailField(required=True)
+    
+    # --- Company Details ---
+    company_name = forms.CharField(
+        max_length=200, required=True, label="Company Name (Optional)",
+        widget=forms.TextInput(attrs={'placeholder': 'Your business/company name'})
+    )
+    address = forms.CharField(
+        max_length=500, required=True, label="Company Address (Optional)",
+        widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full h-20', 'placeholder': 'Your business address'})
+    )
+    phone = forms.CharField(
+        max_length=20, required=True, label="Company Phone (Optional)",
+        widget=forms.TextInput(attrs={'placeholder': 'Your contact phone number'})
+    )
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password1', 'password2']
+        # Update fields to include the user's personal name fields
+        fields = ['username', 'first_name', 'last_name', 'email']
+
+    def save(self, commit=True):
+        # The parent save method will now correctly handle saving the username,
+        # first_name, last_name, and email to the User model.
+        # We must commit it to get a user ID.
+        user = super().save(commit=True)
+        
+        # Now, handle the company details by creating/updating the AdminProfile.
+        admin_profile, created = AdminProfile.objects.get_or_create(user=user)
+        
+        admin_profile.company_name = self.cleaned_data.get('company_name', '')
+        admin_profile.company_address = self.cleaned_data.get('address', '')
+        admin_profile.company_phone = self.cleaned_data.get('phone', '')
+        
+        # Save the AdminProfile if we are committing.
+        if commit:
+            admin_profile.save()
+        return user
 
 
 

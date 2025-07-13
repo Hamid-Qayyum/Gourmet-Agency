@@ -7,25 +7,25 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.2/dist/full.min.css" rel="stylesheet" />
   <style>
-    .glass-card {
-      backdrop-filter: blur(20px);
-      background-color: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
+    .glass-card { backdrop-filter: blur(20px); background-color: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .form-group:not(:last-child) { margin-bottom: 1rem; }
+    .form-label { display: block; margin-bottom: 0.25rem; }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-base-200">
-
-  <div class="w-[460px] p-10 rounded-3xl glass-card shadow-xl text-white bg-neutral text-sm">
+  <div class="w-full max-w-lg p-8 rounded-3xl glass-card shadow-xl text-white text-sm">
     <h2 class="text-center text-xl font-semibold tracking-widest mb-6 opacity-90">CREATE YOUR ACCOUNT</h2>
 
     <form method="post" novalidate>
       {% csrf_token %}
       
       {% for field in form %}
-        <div class="mb-4">
-          <label for="{{ field.id_for_label }}" class="block mb-1 text-gray-300">{{ field.label }}</label>
+        <div class="form-group">
+          <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
           {{ field }}
+          {% if field.help_text %}
+            <p class="text-xs text-gray-400 mt-1">{{ field.help_text }}</p>
+          {% endif %}
           {% if field.errors %}
             <p class="text-error text-xs mt-1">{{ field.errors|striptags }}</p>
           {% endif %}
@@ -37,18 +37,22 @@
 
     <div class="text-center mt-6 text-sm text-gray-300">
       Already have an account?
-      <a href="{% url 'stock:login' %}" class="link link-info ml-1 font-medium">Login</a>
+      <a href="{% url 'login' %}" class="link link-info ml-1 font-medium">Login</a>
     </div>
   </div>
 
-  <!-- Style all form inputs -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('input, select, textarea').forEach(el => {
-        el.classList.add('input', 'input-bordered', 'w-full', 'bg-transparent', 'text-white');
+      // Find all input and textarea elements that are direct children of the form
+      const form = document.querySelector('form');
+      form.querySelectorAll('input, textarea').forEach(el => {
+          // Add default input class, unless it's a textarea
+          if (el.tagName.toLowerCase() !== 'textarea') {
+              el.classList.add('input', 'input-bordered');
+          }
+          el.classList.add('w-full', 'bg-transparent', 'text-white');
       });
     });
   </script>
-
 </body>
 </html>

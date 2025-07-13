@@ -10,6 +10,9 @@ class AdminProfile(models.Model):
     security_question = models.CharField(max_length=255, blank=True, null=True)
     security_answer_hash = models.CharField(max_length=128, blank=True, null=True)
 
+    company_name = models.CharField(max_length=200, blank=True, null=True)
+    company_address = models.CharField(max_length=500, blank=True, null=True)
+    company_phone = models.CharField(max_length=20, blank=True, null=True)
 
     def set_password(self, raw_password):
         self.admin_password_hash = make_password(raw_password)
