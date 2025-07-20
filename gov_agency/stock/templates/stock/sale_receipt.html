@@ -81,7 +81,7 @@
                     </td>
                     <td class="qty">{{item.quantity_sold_decimal}} </td>
                     <td class="price">Rs {{ item.selling_price_per_item|floatformat:2 }}</td>
-                    <td class="amount">Rs {{ item.total_item_final_revenue|floatformat:2 }}</td>
+                    <td class="amount">Rs {{ item.gross_line_subtotal|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
             </tbody>

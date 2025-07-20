@@ -237,13 +237,13 @@ class AddItemToSaleForm(forms.Form):
 
     # User inputs for this item
     quantity_to_add = forms.DecimalField(
-        label="Quantity to Add (e.g., 1.01 for 1 Carton + 1 Item)",
+        label="Qty to Sell (e.g., 1.01, 2.00)",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.01','placeholder': '1.01'})
     )
     selling_price_per_item = forms.DecimalField(
-        label="Selling Price per INDIVIDUAL Item for this batch",
+        label="Selling Price per INDIVIDUAL Item",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_selling_price', 'step': '0.01','placeholder': 'Price for Indivisual Item'})

@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+  You can leave this file mostly empty.
+  If you have any custom CSS in your old style.css, 
+  you can move it here below the @tailwind directives.
+*/

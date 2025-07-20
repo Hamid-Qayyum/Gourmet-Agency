@@ -15,10 +15,6 @@ from expense.models import Expense
 from .models import ShopFinancialTransaction, DailySummary # <-- Import the new model
 from .forms import DateFilterForm 
 
-
-
-
-
 # Import models from both apps
 from stock.models import Vehicle, Shop, SalesTransaction
 from .models import ShopFinancialTransaction

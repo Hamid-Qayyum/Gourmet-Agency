@@ -19,28 +19,22 @@
                     <table class="table table-sm w-full">
                         <thead>
                             <tr>
-                                <th>Date & Net Quantity Breakdown</th> <!-- Title updated -->
-                                <th class="text-right">Total Revenue</th>
+                                <th>Date & Net Quantity Breakdown</th>
+                                <th class="text-right">Net Revenue</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for entry in daily_summary %}
                                 <tr class="hover">
-                                    <td>
+                                    <td class="align-top">
                                         <div class="font-semibold">{{ entry.day|date:"l, F j, Y" }}</div>
                                         <ul class="text-xs text-base-content/70 list-disc list-inside ml-4 mt-1">
                                             {% for breakdown in entry.quantity_breakdown %}
-                                                <!-- Only show items that were actually sold -->
-                                                {% if breakdown.actual_sold > 0 %}
                                                 <li>
-                                                    <!-- USE THE NEW 'actual_sold' VALUE -->
-                                                    <strong>{{ breakdown.actual_sold|floatformat:"-2g" }}</strong> x 
+                                                    <strong>{{ breakdown.net_quantity|floatformat:"-2g" }}</strong> x 
                                                     {{ breakdown.product_detail_snapshot__quantity_in_packing|floatformat:"-2g" }}
                                                     {{ breakdown.product_detail_snapshot__unit_of_measure }}
                                                 </li>
-                                                {% endif %}
-                                            {% empty %}
-                                                <li class="list-none italic">No items sold.</li>
                                             {% endfor %}
                                         </ul>
                                     </td>
@@ -57,7 +51,7 @@
             </div>
         </div>
 
-        <!-- Monthly Summary Card (with the same changes) -->
+        <!-- Monthly Summary Card -->
         <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
                 <h2 class="card-title">Monthly Sales Summary</h2>
@@ -65,26 +59,22 @@
                     <table class="table table-sm w-full">
                         <thead>
                             <tr>
-                                <th>Month & Net Quantity Breakdown</th> <!-- Title updated -->
-                                <th class="text-right">Total Revenue</th>
+                                <th>Month & Net Quantity Breakdown</th>
+                                <th class="text-right">Net Revenue</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for entry in monthly_summary %}
                                 <tr class="hover">
-                                    <td>
+                                    <td class="align-top">
                                         <div class="font-semibold">{{ entry.month|date:"F Y" }}</div>
                                         <ul class="text-xs text-base-content/70 list-disc list-inside ml-4 mt-1">
                                              {% for breakdown in entry.quantity_breakdown %}
-                                                {% if breakdown.actual_sold > 0 %}
                                                 <li>
-                                                    <strong>{{ breakdown.actual_sold|floatformat:"-2g" }}</strong> x 
+                                                    <strong>{{ breakdown.net_quantity|floatformat:"-2g" }}</strong> x 
                                                     {{ breakdown.product_detail_snapshot__quantity_in_packing|floatformat:"-2g" }}
                                                     {{ breakdown.product_detail_snapshot__unit_of_measure }}
                                                 </li>
-                                                {% endif %}
-                                            {% empty %}
-                                                <li class="list-none italic">No items sold.</li>
                                             {% endfor %}
                                         </ul>
                                     </td>

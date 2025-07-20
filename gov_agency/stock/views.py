@@ -1257,36 +1257,101 @@ def performance_summary_hub_view(request):
 @login_required
 def group_performance_summary_view(request, vehicle_pk=None):
     """
-    Calculates and displays daily and monthly sales totals for a specific
-    vehicle or for the store (sales with no vehicle).
+    DEFINITIVE VERSION: This view calculates all figures dynamically from the
+    SalesTransactionItem records to guarantee accuracy. It correctly subtracts
+    the value and quantity of returned items.
     """
     user = request.user
     
-    # Filter the base queryset based on the selected group
     if vehicle_pk:
         grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk, user=user)
         grouping_name = f"Performance Summary for: {grouping_object.vehicle_number}"
-        base_query = SalesTransaction.objects.filter(user=user, assigned_vehicle=grouping_object)
+        # Get the primary keys of all transactions for this group
+        transaction_pks = SalesTransaction.objects.filter(
+            user=user, assigned_vehicle=grouping_object
+        ).values_list('pk', flat=True)
     else:
         grouping_object = None
         grouping_name = "Performance Summary for: Store"
-        base_query = SalesTransaction.objects.filter(user=user, assigned_vehicle__isnull=True)
+        transaction_pks = SalesTransaction.objects.filter(
+            user=user, assigned_vehicle__isnull=True
+        ).values_list('pk', flat=True)
 
-    # --- Daily Sales Calculation ---
-    # Group transactions by day and sum the revenue for each day
-    daily_summary = base_query.annotate(
-        day=TruncDate('transaction_time')
-    ).values('day').annotate(
-        total_revenue=Sum('grand_total_revenue')
-    ).order_by('-day')
+    # Base queryset for all relevant items
+    base_items_query = SalesTransactionItem.objects.filter(transaction_id__in=transaction_pks)
 
-    # --- Monthly Sales Calculation ---
-    # Group transactions by month and sum the revenue for each month
-    monthly_summary = base_query.annotate(
-        month=TruncMonth('transaction_time')
-    ).values('month').annotate(
-        total_revenue=Sum('grand_total_revenue')
-    ).order_by('-month')
+    # --- Daily Summary Calculation ---
+    # Get all unique days from the item's transaction time
+    days_with_sales = base_items_query.annotate(
+        day=TruncDate('transaction__transaction_time')
+    ).values_list('day', flat=True).distinct().order_by('-day')
+    
+    daily_summary = []
+    for day in days_with_sales:
+        items_on_day = base_items_query.filter(transaction__transaction_time__date=day)
+        
+        # --- DYNAMIC NET REVENUE CALCULATION ---
+        # This is the single, correct query for net revenue.
+        # It calculates (dispatched - returned) * price for each item and sums it up.
+        net_revenue_aggregation = items_on_day.aggregate(
+            net_revenue=Sum(
+                (F('quantity_sold_decimal') - F('returned_quantity_decimal')) *
+                F('items_per_master_unit_at_sale') *
+                F('selling_price_per_item'),
+                output_field=DecimalField()
+            )
+        )
+        net_revenue_on_day = net_revenue_aggregation['net_revenue'] or Decimal('0.00')
+
+        # --- DYNAMIC NET QUANTITY CALCULATION ---
+        # This correctly groups by packaging and sums the net quantities.
+        quantity_breakdown = items_on_day.values(
+            'product_detail_snapshot__quantity_in_packing',
+            'product_detail_snapshot__unit_of_measure'
+        ).annotate(
+            net_quantity=Sum(F('quantity_sold_decimal') - F('returned_quantity_decimal'))
+        ).order_by('-net_quantity')
+        
+        daily_summary.append({
+            'day': day,
+            'total_revenue': net_revenue_on_day,
+            'quantity_breakdown': [item for item in quantity_breakdown if item['net_quantity'] > 0]
+        })
+
+    # --- Monthly Summary Calculation (with the same correct logic) ---
+    months_with_sales = base_items_query.annotate(
+        month=TruncMonth('transaction__transaction_time')
+    ).values_list('month', flat=True).distinct().order_by('-month')
+
+    monthly_summary = []
+    for month in months_with_sales:
+        items_in_month = base_items_query.filter(
+            transaction__transaction_time__year=month.year,
+            transaction__transaction_time__month=month.month
+        )
+        
+        net_revenue_aggregation = items_in_month.aggregate(
+            net_revenue=Sum(
+                (F('quantity_sold_decimal') - F('returned_quantity_decimal')) *
+                F('items_per_master_unit_at_sale') *
+                F('selling_price_per_item'),
+                output_field=DecimalField()
+            )
+        )
+        net_revenue_in_month = net_revenue_aggregation['net_revenue'] or Decimal('0.00')
+        
+        quantity_breakdown = items_in_month.values(
+            'product_detail_snapshot__quantity_in_packing',
+            'product_detail_snapshot__unit_of_measure'
+        ).annotate(
+            net_quantity=Sum(F('quantity_sold_decimal') - F('returned_quantity_decimal'))
+        ).order_by('-net_quantity')
+
+        monthly_summary.append({
+            'month': month,
+            'total_revenue': net_revenue_in_month,
+            'quantity_breakdown': [item for item in quantity_breakdown if item['net_quantity'] > 0]
+        })
 
     context = {
         'grouping_name': grouping_name,
@@ -1294,7 +1359,6 @@ def group_performance_summary_view(request, vehicle_pk=None):
         'monthly_summary': monthly_summary,
     }
     return render(request, 'stock/group_performance_summary.html', context)
-
 
 
 @login_required

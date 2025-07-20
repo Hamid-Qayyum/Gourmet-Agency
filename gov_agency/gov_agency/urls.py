@@ -19,7 +19,7 @@ from django.urls import path, include
 from . import views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('gov_agencykaadmin/', admin.site.urls),
     path('',include('dashboard.urls')),
 
     # tooogle admin views.............
@@ -28,8 +28,8 @@ urlpatterns = [
     path('forgot-admin-password/', views.forgot_admin_password_view, name='forgot_admin_password'),
 
 
-    path('stock', include('stock.urls')),
-    path('accounts/', include('accounts.urls')),
+    path('stock/', include('stock.urls',namespace='stock')),
+    path('accounts/', include('accounts.urls', namespace='accounts')),
     path('claims/', include('claim.urls')),
     path('expenses/', include('expense.urls', namespace='expense')),
     path('', include('django.contrib.auth.urls')),

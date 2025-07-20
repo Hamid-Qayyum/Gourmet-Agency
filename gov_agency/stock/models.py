@@ -152,7 +152,7 @@ class SalesTransaction(models.Model):
         ('PENDING_ITEMS', 'Pending Items'),     # Cart is being built, not yet finalized
         ('PENDING_DELIVERY', 'Pending Delivery'), # Finalized, vehicle assigned, awaiting delivery confirmation
         ('COMPLETED', 'Completed'),             # Delivered, or no delivery needed and paid
-        ('PARTIALLY_RETURNED', 'Partially Returned'),
+        ('PARTIALLY_RETURNED', 'Returned'),
         ('FULLY_RETURNED', 'Fully Returned'),
         ('CANCELLED', 'Cancelled'),
     ]

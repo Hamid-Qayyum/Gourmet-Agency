@@ -45,7 +45,7 @@
                                 <label class="label" for="{{ add_item_form.total_items_available_display.id_for_label }}"><span class="label-text">{{ add_item_form.total_items_available_display.label }}</span></label>
                                 {{ add_item_form.total_items_available_display }}
                             </div>
-                            <div class="form-control w-full">
+                            <div class="form-control w-full ">
                                 <label class="label" for="{{ add_item_form.cost_price_display.id_for_label }}"><span class="label-text">{{ add_item_form.cost_price_display.label }}</span></label>
                                 {{ add_item_form.cost_price_display }}
                             </div>
@@ -174,7 +174,6 @@
             </div>
             {% endif %}
         </div>
-        <a href="{% url 'stock:all_transactions_list' %}" class="btn btn-success hover:bg-base-300 ">All Sales</a>
     </div>
 </div>
 {% endblock %}
