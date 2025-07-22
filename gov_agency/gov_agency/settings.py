@@ -47,7 +47,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'stock.apps.StockConfig',
     'django.contrib.humanize',
-    'django.templatetags',
     'accounts.apps.AccountsConfig',
     'claim.apps.ClaimConfig',
     'expense.apps.ExpenseConfig', 
@@ -146,15 +145,15 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_REDIRECT_URL = 'dashboard:main_dashboard'
-LOGOUT_REDIRECT_URL = '/login'
-LOGIN_URL = '/login/'
+LOGOUT_REDIRECT_URL = 'login'
+LOGIN_URL = 'login/'
 
-# if ENVIRONMENT == 'production':
-#     SESSION_COOKIE_SECURE = True
-#     CSRF_COOKIE_SECURE = True
-#     SECURE_SSL_REDIRECT = True
+if ENVIRONMENT == 'production':
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
 
-#     # HSTS Settings (tells browsers to always use HTTPS in the future)
-#     SECURE_HSTS_SECONDS = 31536000  # 30 days. Increase to 1 year (31536000) after you confirm everything works.
-#     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-#     SECURE_HSTS_PRELOAD = True
+    # HSTS Settings (tells browsers to always use HTTPS in the future)
+    SECURE_HSTS_SECONDS = 31536000  # 30 days. Increase to 1 year (31536000) after you confirm everything works.
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True

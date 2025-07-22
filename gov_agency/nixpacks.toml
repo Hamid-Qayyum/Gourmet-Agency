@@ -1,21 +1,18 @@
-# A nixpacks.toml file tells the build system exactly what you need.
+# nixpacks.toml (Corrected)
 
 # Phase 1: Setup the environment
 [phases.setup]
-# We need both Python and Node.js
-nixPkgs = ["...", "python311", "nodejs-18_x"]
+# List the specific packages needed. Nixpacks will handle the base system.
+nixPkgs = ["python311", "nodejs-18_x"]
 
 # Phase 2: Install dependencies
 [phases.install]
-# First, install pip packages, then npm packages
 cmds = ["pip install -r requirements.txt", "npm install"]
 
 # Phase 3: Build the application
 [phases.build]
-# First, build the frontend, then run Django's collectstatic
 cmds = ["npm run build", "python manage.py collectstatic --no-input"]
 
 # Phase 4: Define the start command
 [start]
-# This is the command that runs your server
 cmd = "gunicorn gov_agency.wsgi:application --bind 0.0.0.0:8000"
