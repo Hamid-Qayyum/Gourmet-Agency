@@ -1,10 +1,18 @@
-# nixpacks.toml
+# nixpacks.toml (Definitive Version)
 
+# Tell Nixpacks to install both Python and Node.js environments
 providers = ["python", "node"]
 
+# --- Define the build and start commands ---
+
+# This section defines the command that will be run when the application starts
+[start]
+cmd = "gunicorn gov_agency.wsgi:application --bind 0.0.0.0:$PORT"
+
+# This section defines the commands that will be run during the build/install phase
 [phases.install]
 cmds = [
-    "pip install --upgrade pip", # Good practice to ensure pip is up to date
+    "pip install --upgrade pip",
     "pip install -r requirements.txt", 
     "npm install"
 ]
@@ -14,7 +22,3 @@ cmds = [
     "npm run build", 
     "python manage.py collectstatic --no-input"
 ]
-
-[start]
-# The path to your wsgi file is 'gov_agency.wsgi'
-cmd = "gunicorn gov_agency.wsgi --bind 0.0.0.0:$PORT"
