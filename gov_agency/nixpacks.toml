@@ -1,25 +1,20 @@
-# nixpacks.toml (Corrected Version)
+# nixpacks.toml
 
-# This tells Nixpacks which language environments to install.
-# It will install the latest stable versions of both.
 providers = ["python", "node"]
 
-# --- Build and Start Phases ---
-
-# Phase 1: Install dependencies
 [phases.install]
 cmds = [
+    "pip install --upgrade pip", # Good practice to ensure pip is up to date
     "pip install -r requirements.txt", 
     "npm install"
 ]
 
-# Phase 2: Build the application
 [phases.build]
 cmds = [
     "npm run build", 
     "python manage.py collectstatic --no-input"
 ]
 
-# Phase 3: Define the start command
 [start]
-cmd = "gunicorn gov_agency.wsgi:application --bind 0.0.0.0:$PORT"
+# The path to your wsgi file is 'gov_agency.wsgi'
+cmd = "gunicorn gov_agency.wsgi --bind 0.0.0.0:$PORT"
