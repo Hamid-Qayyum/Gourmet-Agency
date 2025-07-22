@@ -29,11 +29,13 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 if ENVIRONMENT == 'development':
     DEBUG = True
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    # No need for CSRF_TRUSTED_ORIGINS in development
 else:
     DEBUG = False
-
-ALLOWED_HOSTS = ['localhost', '127.0.0.1','governmet-agency-production.up.railway.app','*']
-
+    # Set your specific domain for security
+    ALLOWED_HOSTS = ['governmet-agency-production.up.railway.app']
+    CSRF_TRUSTED_ORIGINS = ['https://governmet-agency-production.up.railway.app']
 
 # Application definition
 
