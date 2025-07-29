@@ -56,6 +56,11 @@
                                 {% if add_item_form.quantity_to_add.errors %}<p class="text-error text-xs mt-1">{{ add_item_form.quantity_to_add.errors|join:", " }}</p>{% endif %}
                             </div>
                             <div class="form-control w-full">
+                                <label class="label" for="{{ add_item_form.price_per_carton.id_for_label }}"><span class="label-text font-medium">{{ add_item_form.price_per_carton.label }}</span></label>
+                                {{ add_item_form.price_per_carton }}
+                                {% if add_item_form.price_per_carton.errors %}<p class="text-error text-xs mt-1">{{ add_item_form.price_per_carton.errors|join:", " }}</p>{% endif %}
+                            </div>
+                            <div class="form-control w-full">
                                 <label class="label" for="{{ add_item_form.selling_price_per_item.id_for_label }}"><span class="label-text font-medium">{{ add_item_form.selling_price_per_item.label }}</span></label>
                                 {{ add_item_form.selling_price_per_item }}
                                 {% if add_item_form.selling_price_per_item.errors %}<p class="text-error text-xs mt-1">{{ add_item_form.selling_price_per_item.errors|join:", " }}</p>{% endif %}
@@ -298,6 +303,44 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // Run the calculation once when the page first loads to set the initial total
     updateGrandTotal();
+
+    const pricePerCartonInput = document.getElementById('add_item_price_per_carton');
+    const sellingPriceInput = document.getElementById('add_item_selling_price');
+    const productBatchSelect = document.getElementById('add_item_product_batch_select');
+    let itemsPerMasterUnit = 0;
+
+    function fetchItemsPerMasterUnit(pk, callback) {
+        if (!pk) return callback(0);
+        fetch(`{% url 'stock:ajax_get_batch_info_for_sale' pk=0 %}`.replace('0', pk))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    callback(data.data.items_per_master_unit);
+                } else {
+                    callback(0);
+                }
+            })
+            .catch(() => callback(0));
+    }
+
+    function updateIndividualPrice() {
+        const cartonPrice = parseFloat(pricePerCartonInput.value) || 0;
+        if (cartonPrice > 0 && itemsPerMasterUnit > 0) {
+            sellingPriceInput.value = (cartonPrice / itemsPerMasterUnit).toFixed(2);
+        }
+    }
+
+    if (productBatchSelect) {
+        productBatchSelect.addEventListener('change', function() {
+            fetchItemsPerMasterUnit(this.value, function(items) {
+                itemsPerMasterUnit = items;
+                updateIndividualPrice();
+            });
+        });
+    }
+    if (pricePerCartonInput) {
+        pricePerCartonInput.addEventListener('input', updateIndividualPrice);
+    }
 });
 </script>
 {% endblock %}

@@ -235,18 +235,33 @@ class AddItemToSaleForm(forms.Form):
     total_items_available_display = forms.CharField(label="Total Items Available", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered input-sm w-full bg-base-200', 'id': 'add_item_total_items'}))
     cost_price_display = forms.CharField(label="Your Cost/Item", required=False, widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-bordered input-sm w-full bg-base-200', 'id': 'add_item_cost_price'}))
 
-    # User inputs for this item
     quantity_to_add = forms.DecimalField(
         label="Qty to Sell (e.g., 1.01, 2.00)",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
         widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_quantity_to_add', 'step': '0.01','placeholder': '1.01'})
     )
+    price_per_carton = forms.DecimalField(
+        label="Price per Carton/PET (optional)",
+        max_digits=10, decimal_places=2,
+        required=False,
+        widget=forms.NumberInput(attrs={
+            'class': 'input input-bordered w-full',
+            'id': 'add_item_price_per_carton',
+            'step': '0.01',
+            'placeholder': 'e.g., 1200.00'
+        })
+    )
     selling_price_per_item = forms.DecimalField(
         label="Selling Price per INDIVIDUAL Item",
         max_digits=10, decimal_places=2,
         validators=[MinValueValidator(Decimal('0.01'))],
-        widget=forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'id': 'add_item_selling_price', 'step': '0.01','placeholder': 'Price for Indivisual Item'})
+        widget=forms.NumberInput(attrs={
+            'class': 'input input-bordered w-full',
+            'id': 'add_item_selling_price',
+            'step': '0.01',
+            'placeholder': 'Price for Individual Item'
+        })
     )
 
     def __init__(self, *args, **kwargs):
@@ -258,7 +273,6 @@ class AddItemToSaleForm(forms.Form):
             ).select_related('product_base').order_by('product_base__name', 'expirey_date')
             self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} {obj.quantity_in_packing} {obj.unit_of_measure} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
         self.fields['product_detail_batch'].empty_label = "--- Select Product Batch to Add ---"
-
 
     def clean_quantity_to_add(self):
         quantity_decimal = self.cleaned_data.get('quantity_to_add')
@@ -285,9 +299,10 @@ class AddItemToSaleForm(forms.Form):
         cleaned_data = super().clean()
         product_detail_batch = cleaned_data.get('product_detail_batch')
         quantity_to_add_decimal = cleaned_data.get('quantity_to_add')
+        price_per_carton = cleaned_data.get('price_per_carton')
+        selling_price_per_item = cleaned_data.get('selling_price_per_item')
 
         if product_detail_batch and quantity_to_add_decimal:
-            # Convert decimal quantity (e.g., 1.1) to total individual items
             items_per_mu = product_detail_batch.items_per_master_unit
             if not (items_per_mu and items_per_mu > 0):
                  self.add_error('product_detail_batch', "Selected product has invalid configuration.")
@@ -307,6 +322,13 @@ class AddItemToSaleForm(forms.Form):
                                    f"Not enough. Adding {quantity_to_add_decimal} ({total_individual_items_being_added} items), but only {product_detail_batch.total_items_in_stock} items available.")
             else:
                 self.add_error(None, "Stock verification error on ProductDetail model.")
+
+        # Auto-calculate selling price per item if price per carton is provided
+        if price_per_carton and product_detail_batch:
+            items_per_mu = product_detail_batch.items_per_master_unit
+            if items_per_mu and items_per_mu > 0:
+                calculated = price_per_carton / items_per_mu
+                cleaned_data['selling_price_per_item'] = calculated.quantize(Decimal('0.01'))
         return cleaned_data
 
 

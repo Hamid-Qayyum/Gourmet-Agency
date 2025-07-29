@@ -454,6 +454,7 @@ def ajax_get_batch_details_for_sale(request, pk): # Renamed from get_sale_produc
             'total_individual_items_available': detail.total_items_in_stock,
             'cost_price_per_item': str(detail.price_per_item),
             'suggested_selling_price_per_item': str(round(detail.price_per_item * Decimal('1.20'), 2)), # 20% markup
+            'items_per_master_unit': detail.items_per_master_unit,
         }
         return JsonResponse({'success': True, 'data': data})
     except ProductDetail.DoesNotExist:
@@ -1091,10 +1092,25 @@ def delete_vehicle_action_view(request, vehicle_pk):
 def manage_shops_view(request):
     add_form_in_modal_has_errors = False 
     add_shop_form = ShopForm() # For the "Add New Shop" modal
+    query = request.GET.get('q','').strip()
+    shops_queryset = Shop.objects.filter(user=request.user).order_by('name')
+    if query:
+        shops_queryset = shops_queryset.filter(
+            Q(name__icontains=query) |
+            Q(location_address__icontains=query) |
+            Q(contact_person__icontains=query) |
+            Q(contact_phone__icontains=query)
+        )
+    paginator = Paginator(shops_queryset, 100)
+    page_number = request.GET.get('page')
+    try:
+        shops_page = paginator.get_page(page_number)
+    except PageNotAnInteger:
+        shops_page = paginator.page(1)
+    except EmptyPage:
+        shops_page = paginator.page(paginator.num_pages)
 
     if request.method == 'POST':
-        # This assumes POST to this view is for creating new shop.
-        # Update actions will POST to shop_update_action_view.
         filled_add_form = ShopForm(request.POST)
         if filled_add_form.is_valid():
             shop_instance = filled_add_form.save(commit=False)
@@ -1106,12 +1122,12 @@ def manage_shops_view(request):
             messages.error(request, "Error adding shop. Please correct the form.")
             add_form_in_modal_has_errors = True
             add_shop_form = filled_add_form # Pass form with errors back to "Add" modal
-    
-    shops_list = Shop.objects.filter(user=request.user).order_by('name')
     context = {
         'add_form': add_shop_form, # Use a specific name for the add form
-        'shops': shops_list,
+        'shops': shops_page,
+        'page_obj': shops_page,
         'add_form_in_modal_has_errors': add_form_in_modal_has_errors,
+        'query': query,
     }
     return render(request, 'stock/add_shops.html', context)
 
@@ -1182,7 +1198,25 @@ def list_shops_for_sales_view(request):
     # This view should be fine if it only lists Shop instances.
     # The links it generates will point to shop_purchase_history_view.
     shops = Shop.objects.filter(user=request.user, is_active=True).order_by('name')
-    context = {'shops': shops}
+    
+    # Filter shops to only include those with transactions having grand_total_revenue > 0
+    shops_with_revenue = []
+    for shop in shops:
+        shop_transactions = SalesTransaction.objects.filter(
+            customer_shop=shop,
+            user=request.user 
+        ).select_related(
+            'assigned_vehicle'
+        ).prefetch_related(
+            'items__product_detail_snapshot__product_base'
+        ).order_by('-transaction_time')
+        
+        # Check if this shop has any transactions with revenue > 0
+        total_revenue = sum(tx.grand_total_revenue for tx in shop_transactions)
+        if total_revenue > 0:
+            shops_with_revenue.append(shop)
+
+    context = {'shops': shops_with_revenue}
     return render(request, 'stock/list_shops_for_sales.html', context)
 
 @login_required

@@ -65,7 +65,7 @@
                                 <ul class="list-disc list-inside">
                                 {% for item in claim.items.all %}
                                     {% if item.item_type == 'CLAIMED' %}
-                                        <li>{{ item.quantity_decimal }} x {{ item.product_detail.product_base.name }}</li>
+                                        <li>{{ item.quantity_decimal }} x {{ item.product_detail.product_base.name }} ({{item.product_detail.quantity_in_packing}} {{ item.product_detail.unit_of_measure }})</li>
                                     {% endif %}
                                 {% empty %}
                                     <li class="italic text-base-content/60 list-none">None</li>
@@ -79,7 +79,7 @@
                                 <ul class="list-disc list-inside">
                                 {% for item in claim.items.all %}
                                     {% if item.item_type == 'EXCHANGED' %}
-                                        <li>{{ item.quantity_decimal }} x {{ item.product_detail.product_base.name }}</li>
+                                    <li>{{ item.quantity_decimal }} x {{ item.product_detail.product_base.name }} ({{item.product_detail.quantity_in_packing}} {{ item.product_detail.unit_of_measure }})</li>
                                     {% endif %}
                                 {% empty %}
                                      <li class="italic text-base-content/60 list-none">None</li>

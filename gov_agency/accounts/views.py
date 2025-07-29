@@ -516,10 +516,10 @@ def generate_today_summary_view(request):
         
         # --- FINAL NET CALCULATIONS (These formulas are already correct) ---
         cash_from_cash_sales = sales_today.filter(payment_type='CASH').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_physical_cash = (cash_from_cash_sales + (total_cash_received - total_debit_today)) - total_expense
+        net_physical_cash = (cash_from_cash_sales + total_cash_received ) - total_expense
         
         cash_from_direct_sales = sales_today.filter(payment_type__in=['CASH', 'ONLINE']).aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_total_settlement = (cash_from_direct_sales + (total_cash_received - total_debit_today)) - total_expense
+        net_total_settlement = (cash_from_direct_sales + total_cash_received) - total_expense
         
         # --- SAVE THE SUMMARY ---
         summary, created = DailySummary.objects.update_or_create(

@@ -65,7 +65,7 @@
                         <th>Returned</th>
                         <th>Discount</th>
                         <th class="">Total Revenue</th>
-                        <th class="">Profit</th>
+                        {% comment %} <th class="">Profit</th> {% endcomment %}
                         <th>Payment</th>
                          <th>Note</th>
                         <th>Vehicle</th>
@@ -114,9 +114,9 @@
                         </td>
 
                         <td class=" font-semibold whitespace-nowrap">Rs {{ tx.grand_total_revenue|floatformat:2|intcomma }}</td>
-                        <td class=" font-bold whitespace-nowrap {% if tx.calculated_grand_profit > 0 %}text-success{% elif tx.calculated_grand_profit < 0 %}text-error{% endif %}">
+                        {% comment %} <td class=" font-bold whitespace-nowrap {% if tx.calculated_grand_profit > 0 %}text-success{% elif tx.calculated_grand_profit < 0 %}text-error{% endif %}">
                             Rs {{ tx.calculated_grand_profit|floatformat:2|intcomma }}
-                        </td>
+                        </td> {% endcomment %}
                         <td><span class="badge badge-sm badge-outline">{{ tx.get_payment_type_display }}</span></td>
                         <td>
                         <span 

@@ -11,14 +11,28 @@
         <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline">← Back to Hub</a>
     </div>
 
+    <!-- Search Bar -->
+    <div class="mb-6">
+        <div class="form-control w-full max-w-md">
+            <label class="label">
+                <span class="label-text">Search customers and shops</span>
+            </label>
+            <input type="text" id="searchInput" placeholder="Type to search..." class="input input-bordered w-full" />
+        </div>
+    </div>
+
     <!-- Section for Registered Shops -->
     <div class="card bg-base-100 shadow-xl mb-8">
         <div class="card-body">
             <h2 class="card-title">Registered Shops</h2>
             {% if associated_shops %}
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                <div id="shopsContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
                     {% for shop in associated_shops %}
-                    <a href="{% url 'accounts:shop_ledger' shop_pk=shop.pk %}" class="p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between">
+                    {% if shop.current_balance != 0 %}
+                    <a href="{% url 'accounts:shop_ledger' shop_pk=shop.pk %}" 
+                       class="shop-item p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between"
+                       data-name="{{ shop.name|lower }}" 
+                       data-address="{{ shop.location_address|lower }}">
                         <div>
                             <div class="font-semibold text-primary">{{ shop.name }}</div>
                             <div class="text-xs text-base-content/70">{{ shop.location_address|truncatewords:5 }}</div>
@@ -26,11 +40,15 @@
                         <div class="text-sm mt-3 pt-2 border-t border-base-300">
                             Balance: 
                             <span class="font-bold {% if shop.current_balance > 0 %}text-error{% elif shop.current_balance < 0 %}text-success{% endif %}">
-                                Rs {{ shop.current_balance|floatformat:2|intcomma }}
+                                Rs {{ shop.current_balance|floatformat:2|intcomma }}
                             </span>
                         </div>
                     </a>
+                    {% endif %}
                     {% endfor %}
+                </div>
+                <div id="noShopsMessage" class="hidden">
+                    <p class="text-sm italic text-base-content/60 mt-4">No shops match your search.</p>
                 </div>
             {% else %}
                 <p class="text-sm italic text-base-content/60 mt-4">No registered shops with transactions found for this group.</p>
@@ -43,20 +61,25 @@
         <div class="card-body">
             <h2 class="card-title">Manual Customers</h2>
             {% if manual_customers %}
-                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                 <div id="customersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
                     {% for customer in manual_customers %}
-                    <a href="{% url 'accounts:manual_customer_ledger'  customer_name=customer.customer_name_snapshot %}" class="p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between">
+                    <a href="{% url 'accounts:manual_customer_ledger'  customer_name=customer.customer_name_snapshot %}" 
+                       class="customer-item p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between"
+                       data-name="{{ customer.customer_name_snapshot|lower }}">
                         <div>
                             <div class="font-semibold text-secondary">{{ customer.customer_name_snapshot }}</div>
                         </div>
                         <div class="text-sm mt-3 pt-2 border-t border-base-300">
                             Balance: 
                             <span class="font-bold {% if customer.balance > 0 %}text-error{% elif customer.balance < 0 %}text-success{% endif %}">
-                                Rs {{ customer.balance|floatformat:2|intcomma }}
+                                Rs {{ customer.balance|floatformat:2|intcomma }}
                             </span>
                         </div>
                     </a>
                     {% endfor %}
+                </div>
+                <div id="noCustomersMessage" class="hidden">
+                    <p class="text-sm italic text-base-content/60 mt-4">No customers match your search.</p>
                 </div>
             {% else %}
                  <p class="text-sm italic text-base-content/60 mt-4">No manual customer transactions found for this group.</p>
@@ -65,4 +88,76 @@
     </div>
 
 </div>
+
+{% endblock %}
+{% block extra_scripts %}
+{{ block.super }}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const shopItems = document.querySelectorAll('.shop-item');
+        const customerItems = document.querySelectorAll('.customer-item');
+        const noShopsMessage = document.getElementById('noShopsMessage');
+        const noCustomersMessage = document.getElementById('noCustomersMessage');
+    
+        function filterItems() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            // Filter shops
+            let visibleShops = 0;
+            shopItems.forEach(item => {
+                const name = item.getAttribute('data-name');
+                const address = item.getAttribute('data-address');
+                const matches = name.includes(searchTerm) || address.includes(searchTerm);
+                
+                if (matches) {
+                    item.style.display = 'block';
+                    visibleShops++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+    
+            // Show/hide no shops message
+            if (visibleShops === 0 && searchTerm !== '') {
+                noShopsMessage.classList.remove('hidden');
+            } else {
+                noShopsMessage.classList.add('hidden');
+            }
+    
+            // Filter customers
+            let visibleCustomers = 0;
+            customerItems.forEach(item => {
+                const name = item.getAttribute('data-name');
+                const matches = name.includes(searchTerm);
+                
+                if (matches) {
+                    item.style.display = 'block';
+                    visibleCustomers++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+    
+            // Show/hide no customers message
+            if (visibleCustomers === 0 && searchTerm !== '') {
+                noCustomersMessage.classList.remove('hidden');
+            } else {
+                noCustomersMessage.classList.add('hidden');
+            }
+        }
+    
+        // Add event listener for real-time search
+        searchInput.addEventListener('input', filterItems);
+        
+        // Clear search when input is cleared
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Escape') {
+                searchInput.value = '';
+                filterItems();
+            }
+        });
+    });
+    </script>
 {% endblock %}
