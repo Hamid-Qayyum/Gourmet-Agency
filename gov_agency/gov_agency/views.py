@@ -3,6 +3,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .models import AdminProfile
 from .forms import SetAdminPasswordForm, EnterAdminPasswordForm, ResetAdminPasswordForm,SecurityAnswerForm
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
 
 @login_required
 def set_admin_password_view(request):
@@ -56,7 +59,12 @@ def toggle_admin_mode_view(request):
     # Redirect back to the page the user was on
     return redirect(request.META.get('HTTP_REFERER', 'dashboard:main_dashboard'))
 
-
+@require_POST
+@csrf_exempt  # Only if needed
+@login_required
+def deactivate_admin_mode(request):
+    request.session.pop('admin_mode_active', None)
+    return JsonResponse({'status': 'Admin mode turned off on unload'})
 
 @login_required
 def forgot_admin_password_view(request):

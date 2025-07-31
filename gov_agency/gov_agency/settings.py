@@ -151,6 +151,8 @@ LOGIN_REDIRECT_URL = 'dashboard:main_dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 LOGIN_URL = 'login/'
 
+
+
 if ENVIRONMENT == 'production':
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

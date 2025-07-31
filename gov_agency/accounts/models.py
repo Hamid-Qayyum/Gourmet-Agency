@@ -146,6 +146,7 @@ class CustomAccountTransaction(models.Model):
     )
     notes = models.CharField(max_length=255, blank=True, null=True)
     transaction_date = models.DateTimeField(default=timezone.now)
+    store_in_daily_summery = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Transaction for {self.account.name} on {self.transaction_date.strftime('%Y-%m-%d')}"

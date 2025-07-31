@@ -25,9 +25,39 @@
         hr.dashed { border: none; border-top: 1px dashed #555; margin: 8px 0; }
         .print-button-container { text-align: center; margin-top: 20px; margin-bottom: 20px; }
         @media print {
-            body { margin: 0; padding: 0; font-size: 9.5pt; background-color: #fff; }
-            .receipt-container { width: 100%; margin: 0; padding: 5mm; border: none; box-shadow: none; }
-            .print-button-container { display: none; }
+            /* Define the paper size and remove browser margins */
+            @page {
+                size: 80mm auto; /* Set the paper width */
+                margin: 0mm;     /* Remove default browser print margins */
+            }
+    
+            /* Set the body width to match the paper */
+            body {
+                width: 97%;
+                margin: 0;
+                padding: 0;
+                background-color: #fff;
+                font-size: 9.5pt; /* Adjusting font size for print is usually necessary */
+            }
+            
+            /* Hide everything except the receipt when printing */
+            body > *:not(.receipt-container) {
+                display: none;
+            }
+    
+            /* Make the receipt container fill the 80mm body and add our own padding */
+            .receipt-container {
+                width: 100%; /* Take up 100% of the 80mm body */
+                margin: 0;
+                padding: 3mm; /* Add a small internal margin so text isn't at the edge */
+                border: none;
+                box-shadow: none;
+            }
+    
+            /* Hide the print button itself from the printout */
+            .print-button-container {
+                display: none;
+            }
         }
     </style>
 </head>

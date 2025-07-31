@@ -48,6 +48,9 @@
                     </svg>
                     Export Excel
                 </a>
+                <label id="reverse_sale_button" for="reverse-sale-modal" class="btn btn-sm btn-outline btn-error">
+                    Reverse Sale
+                </label>
             </div>
         </form>
     </div>
@@ -271,6 +274,44 @@
     {% else %}
         <p class="text-center text-base-content/70 py-8">No sales transactions found.</p>
     {% endif %}
+
+
+{% comment %} reverse sale modal {% endcomment %}
+<input type="checkbox" id="reverse-sale-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-4">Reverse Sale</h3>
+    <form id="reverseSaleForm">
+      {% csrf_token %}
+      <label for="sale_id" class="label">Enter Sale ID(TX ID)</label>
+      <input type="number" name="sale_id" id="sale_id_input" class="input input-bordered w-full mb-4" required>
+      <div class="modal-action">
+        <label for="reverse-sale-modal" class="btn">Cancel</label>
+        <button type="submit" class="btn btn-error">Next</button>
+      </div>
+    </form>
+  </div>
+  <label class="modal-backdrop" for="reverse-sale-modal">Close</label>
+</div>
+
+
+<input type="checkbox" id="confirm-reverse-modal" class="modal-toggle" />
+<div class="modal" role="dialog">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg mb-4">Confirm Reverse Sale</h3>
+    <p class="mb-4" id="confirm-text"></p>
+    <form id="confirmReverseForm" method="post">
+      {% csrf_token %}
+      <div class="modal-action">
+        <label for="confirm-reverse-modal" class="btn">Cancel</label>
+        <button type="submit" class="btn btn-error">Yes, Reverse Sale</button>
+      </div>
+    </form>
+  </div>
+  <label class="modal-backdrop" for="confirm-reverse-modal">Close</label>
+</div>
+
+
 </div>
 {% endblock %}
 {% block extra_scripts %}
@@ -329,6 +370,40 @@ document.addEventListener('DOMContentLoaded', function () {
         noteTextarea.focus();
         editBtn.classList.add('hidden');
         saveBtn.classList.remove('hidden');
+    });
+
+
+
+
+
+
+
+
+
+    document.getElementById("reverse_sale_button").addEventListener("click",function(e){
+        document.getElementById("sale_id_input").value = "";
+    })
+
+    document.getElementById("reverseSaleForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        const saleId = parseInt(document.getElementById("sale_id_input").value);
+        fetch("{% url 'stock:get_sale_info' 0 %}".replace("/0/", `/${saleId}/`))  // 👈 You’ll need this API view
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+                document.getElementById("confirm-text").innerHTML = `
+                    Are you sure you want to reverse Sale #${saleId} made on <strong>${data.date}</strong>?`;
+                
+                const form = document.getElementById("confirmReverseForm");
+                form.action =  "{% url 'stock:reverse_sale_confirm' 0 %}".replace("/0/", `/${saleId}/`);
+    
+                // Close first modal, open second
+                document.getElementById("reverse-sale-modal").checked = false;
+                document.getElementById("confirm-reverse-modal").checked = true;
+            } else {
+                alert("Sale not found.");
+            }
+          });
     });
 });
 </script>

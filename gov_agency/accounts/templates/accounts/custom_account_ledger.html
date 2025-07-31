@@ -106,7 +106,14 @@
                     {% csrf_token %}
                     <h3 class="font-bold text-lg mb-4">Add Ledger Entry for {{ account.name }}</h3>
                     <div class="space-y-4">
-                        {% for field in add_form %}<div class="form-control w-full"><label class="label" for="{{ field.id_for_label }}"><span class="label-text">{{ field.label }}</span></label>{{ field }}{% if field.errors %}<p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>{% endif %}</div>{% endfor %}
+                        {% for field in add_form %}
+                        <div class="form-control w-full">
+                            <label class="label" for="{{ field.id_for_label }}">
+                                <span class="label-text">{{ field.label }}</span>
+                            </label>{{ field }}{% if field.errors %}
+                            <p class="text-error text-xs mt-1">{{ field.errors|join:", " }}</p>
+                            {% endif %}</div>
+                        {% endfor %}
                     </div>
                     <div class="modal-action mt-6"><label for="add_entry_modal_checkbox" class="btn btn-ghost">Cancel</label><button type="submit" class="btn btn-primary">Save Entry</button></div>
                 </form>
@@ -116,7 +123,46 @@
         <!-- EDIT Entry Modal -->
         <input type="checkbox" id="edit_tx_modal_checkbox" class="modal-toggle" />
         <div class="modal modal-bottom sm:modal-middle" role="dialog">
-            <div class="modal-box"><form id="editTxForm" method="post" action=""><!_ Action set by JS _>{% csrf_token %}<h3 class="font-bold text-lg mb-4" id="editTxModalTitle">Edit Entry</h3><div class="space-y-4">{% for field in edit_form %}<div class="form-control w-full"><label class="label" for="update_{{ field.name }}"><span class="label-text">{{ field.label }}</span></label>{% with WIDGET_TYPE=field.field.widget.input_type %}{% if WIDGET_TYPE == 'textarea' %}<textarea name="{{field.name}}" id="update_{{field.name}}" class="{{field.field.widget.attrs.class}}"></textarea>{% else %}<input type="{{WIDGET_TYPE}}" name="{{field.name}}" id="update_{{field.name}}" class="{{field.field.widget.attrs.class}}" step="0.01">{% endif %}{% endwith %}</div>{% endfor %}</div><div class="modal-action mt-6"><label for="edit_tx_modal_checkbox" class="btn btn-ghost">Cancel</label><button type="submit" class="btn btn-info">Save Changes</button></div></form></div><label class="modal-backdrop" for="edit_tx_modal_checkbox">Close</label>
+            <div class="modal-box">
+                <form id="editTxForm" method="post" action="">
+                    <!_ Action set by JS _>
+                    {% csrf_token %}
+                    <h3 class="font-bold text-lg mb-4" id="editTxModalTitle">Edit Entry</h3>
+                    <div class="space-y-4">{% for field in edit_form %}
+                        <div class="form-control w-full">
+                            <label class="label" for="update_{{ field.name }}">
+                                <span class="label-text">{{ field.label }}</span>
+                            </label>
+                                     {% with WIDGET_TYPE=field.field.widget.input_type %}
+                        {% if WIDGET_TYPE == 'select' %}
+                            <select name="{{ field.name }}" id="update_{{ field.name }}" class="{{ field.field.widget.attrs.class|default:'select select-bordered w-full' }}">
+                                {# Loop through the choices for this select field #}
+                                {% for value, text in field.field.choices %}
+                                    <option value="{{ value }}">{{ text }}</option>
+                                {% endfor %}
+                            </select>
+                        {% elif WIDGET_TYPE == 'textarea' %}
+                            <textarea name="{{ field.name }}" id="update_{{ field.name }}" class="{{ field.field.widget.attrs.class|default:'textarea textarea-bordered w-full' }}"></textarea>
+                        {% elif WIDGET_TYPE == 'checkbox' %}
+                             <input type="checkbox" name="{{ field.name }}" id="update_{{ field.name }}" class="{{ field.field.widget.attrs.class|default:'checkbox' }}">
+                        {% else %}
+                            <input type="{{ WIDGET_TYPE }}" 
+                                   name="{{ field.name }}" 
+                                   id="update_{{ field.name }}" 
+                                   class="{{ field.field.widget.attrs.class|default:'input input-bordered w-full' }}" 
+                                   {% if WIDGET_TYPE == 'number' %}step="0.01"{% endif %}>
+                        {% endif %}
+                    {% endwith %}
+                    {# --- END OF FIX --- #}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="modal-action mt-6">
+                                <label for="edit_tx_modal_checkbox" class="btn btn-ghost">Cancel</label><button type="submit" class="btn btn-info">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                    <label class="modal-backdrop" for="edit_tx_modal_checkbox">Close</label>
         </div>
 
         <!-- DELETE Entry Modal -->
@@ -159,13 +205,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (result.success) {
                         const data = result.data;
                         editTxModalTitle.textContent = `Edit Entry #${data.pk}`;
-                        
+                        console.log(data)
                         const formFields = {
                             'transaction_date': data.transaction_date,
                             'entity_name': data.entity_name,
                             'debit_amount': data.debit_amount,
                             'credit_amount': data.credit_amount,
-                            'notes': data.notes
+                            'notes': data.notes,
+                            'store_in_daily_summery' : data.store_in_daily_summery ? 'True' : 'False',
                         };
 
                         for (const fieldName in formFields) {

@@ -33,6 +33,11 @@ urlpatterns = [
    path('reports/sales/', views.sales_report_view, name='sales_report'),
 
 
+   # reverse sales paths............
+   path('sales/reverse/', views.reverse_sale_prompt_view, name='reverse_sale_prompt'),
+   path('api/get-sale-info/<int:sale_id>/', views.get_sale_info, name='get_sale_info'),
+   path('sales/reverse/<int:sale_id>/confirm/', views.confirm_reverse_sale, name='reverse_sale_confirm'),
+
 
    # Recipt view ...........
    path('sales/receipt/<int:sale_pk>/', views.sale_receipt_view, name='sale_receipt'),

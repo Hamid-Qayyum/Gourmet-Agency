@@ -274,61 +274,60 @@ class AddItemToSaleForm(forms.Form):
             self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} {obj.quantity_in_packing} {obj.unit_of_measure} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
         self.fields['product_detail_batch'].empty_label = "--- Select Product Batch to Add ---"
 
-    def clean_quantity_to_add(self):
-        quantity_decimal = self.cleaned_data.get('quantity_to_add')
-        product_detail = self.cleaned_data.get('product_detail_batch')
+    # def clean_quantity_to_add(self):
+    #     quantity_decimal = self.cleaned_data.get('quantity_to_add')
+    #     product_detail = self.cleaned_data.get('product_detail_batch')
 
-        if product_detail and quantity_decimal:
-            # Convert input decimal to total items to sell
-            items_to_sell = product_detail._get_items_from_decimal(quantity_decimal)
-            if items_to_sell <= 0:
-                self.add_error('quantity_to_add', "Must specify a quantity to sell.")
+    #     if product_detail and quantity_decimal:
+    #         # Convert input decimal to total items to sell
+    #         items_to_sell = product_detail._get_items_from_decimal(quantity_decimal)
+    #         if items_to_sell <= 0:
+    #             self.add_error('quantity_to_add', "Must specify a quantity to sell.")
 
-            # Validate loose items part of the input
-            loose_items_input = int((quantity_decimal % 1) * 100)
-            if loose_items_input >= product_detail.items_per_master_unit:
-                 raise forms.ValidationError(f"Loose items part ({loose_items_input}) cannot exceed items per master unit ({product_detail.items_per_master_unit}).")
+    #         # Validate loose items part of the input
+    #         loose_items_input = int((quantity_decimal % 1) * 100)
+    #         if loose_items_input >= product_detail.items_per_master_unit:
+    #              raise forms.ValidationError(f"Loose items part ({loose_items_input}) cannot exceed items per master unit ({product_detail.items_per_master_unit}).")
 
-            # Validate against total available stock
-            if items_to_sell > product_detail.total_items_in_stock:
-                self.add_error('quantity_to_add', f"Not enough stock. Available: {product_detail.total_items_in_stock} items.")
+    #         # Validate against total available stock
+    #         if items_to_sell > product_detail.total_items_in_stock:
+    #             self.add_error('quantity_to_add', f"Not enough stock. Available: {product_detail.total_items_in_stock} items.")
         
-        return quantity_decimal
+    #     return quantity_decimal
     
     def clean(self):
         cleaned_data = super().clean()
         product_detail_batch = cleaned_data.get('product_detail_batch')
-        quantity_to_add_decimal = cleaned_data.get('quantity_to_add')
+        quantity_to_add = cleaned_data.get('quantity_to_add')
         price_per_carton = cleaned_data.get('price_per_carton')
-        selling_price_per_item = cleaned_data.get('selling_price_per_item')
 
-        if product_detail_batch and quantity_to_add_decimal:
-            items_per_mu = product_detail_batch.items_per_master_unit
-            if not (items_per_mu and items_per_mu > 0):
-                 self.add_error('product_detail_batch', "Selected product has invalid configuration.")
-                 return cleaned_data
+        if not product_detail_batch:
+            # If no product is selected, we can't do further validation.
+            return cleaned_data
 
-            full_units_to_add = int(quantity_to_add_decimal)
-            decimal_part_items_to_add = int(round((quantity_to_add_decimal % 1) * Decimal('10.0')))
-            total_individual_items_being_added = (full_units_to_add * items_per_mu) + decimal_part_items_to_add
+        # --- Validation for quantity ---
+        if quantity_to_add:
+            items_to_sell = product_detail_batch._get_items_from_decimal(quantity_to_add)
+            if items_to_sell <= 0:
+                self.add_error('quantity_to_add', "Must specify a quantity to sell.")
 
-            if total_individual_items_being_added <= 0:
-                self.add_error('quantity_to_add', "Quantity must result in at least one item.")
-            
-            # Check against ProductDetail's total_items_in_stock property
-            if hasattr(product_detail_batch, 'total_items_in_stock'):
-                if total_individual_items_being_added > product_detail_batch.total_items_in_stock:
-                    self.add_error('quantity_to_add', 
-                                   f"Not enough. Adding {quantity_to_add_decimal} ({total_individual_items_being_added} items), but only {product_detail_batch.total_items_in_stock} items available.")
-            else:
-                self.add_error(None, "Stock verification error on ProductDetail model.")
+            # Validate loose items part of the input
+            loose_items_input = int((quantity_to_add % 1) * 100)
+            if loose_items_input >= product_detail_batch.items_per_master_unit:
+                 self.add_error('quantity_to_add', f"Loose items part ({loose_items_input}) cannot exceed items per master unit ({product_detail_batch.items_per_master_unit}).")
 
-        # Auto-calculate selling price per item if price per carton is provided
-        if price_per_carton and product_detail_batch:
+            # Validate against total available stock
+            if items_to_sell > product_detail_batch.total_items_in_stock:
+                self.add_error('quantity_to_add', f"Not enough stock. Available: {product_detail_batch.total_items_in_stock} items.")
+        
+        # --- Auto-calculate selling price per item if price per carton is provided ---
+        # And if the user hasn't manually changed the selling_price_per_item field.
+        if price_per_carton and 'selling_price_per_item' not in self.changed_data:
             items_per_mu = product_detail_batch.items_per_master_unit
             if items_per_mu and items_per_mu > 0:
-                calculated = price_per_carton / items_per_mu
-                cleaned_data['selling_price_per_item'] = calculated.quantize(Decimal('0.01'))
+                calculated_price = price_per_carton / items_per_mu
+                cleaned_data['selling_price_per_item'] = calculated_price.quantize(Decimal('0.01'))
+        
         return cleaned_data
 
 

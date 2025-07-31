@@ -413,6 +413,7 @@ def ajax_get_custom_transaction_data(request, pk):
             'debit_amount': str(tx.debit_amount),
             'credit_amount': str(tx.credit_amount),
             'notes': tx.notes or "",
+            'store_in_daily_summery' : tx.store_in_daily_summery,
         }
         return JsonResponse({'success': True, 'data': data})
     except CustomAccount.DoesNotExist:
@@ -494,7 +495,7 @@ def generate_today_summary_view(request):
         sales_today = SalesTransaction.objects.filter(user=request.user, transaction_time__date=today)
         expenses_today = Expense.objects.filter(user=request.user, expense_date__date=today)
         shop_financial_entries_today = ShopFinancialTransaction.objects.filter(user=request.user, transaction_date__date=today)
-        custom_account_entries_today = CustomAccountTransaction.objects.filter(user=request.user, transaction_date__date=today)
+        custom_account_entries_today = CustomAccountTransaction.objects.filter(user=request.user, transaction_date__date=today, store_in_daily_summery=True)
 
         # --- CALCULATE REPORTING & CASH FLOW COMPONENTS ---
         total_revenue = sales_today.aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
@@ -516,10 +517,10 @@ def generate_today_summary_view(request):
         
         # --- FINAL NET CALCULATIONS (These formulas are already correct) ---
         cash_from_cash_sales = sales_today.filter(payment_type='CASH').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_physical_cash = (cash_from_cash_sales + total_cash_received ) - total_expense
+        net_physical_cash = ((cash_from_cash_sales + total_cash_received ) - total_expense) - debit_from_custom
         
         cash_from_direct_sales = sales_today.filter(payment_type__in=['CASH', 'ONLINE']).aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_total_settlement = (cash_from_direct_sales + total_cash_received) - total_expense
+        net_total_settlement = ((cash_from_direct_sales + total_cash_received) - total_expense)- debit_from_custom
         
         # --- SAVE THE SUMMARY ---
         summary, created = DailySummary.objects.update_or_create(
@@ -528,7 +529,7 @@ def generate_today_summary_view(request):
             defaults={
                 'total_revenue': total_revenue,
                 'total_profit': total_profit,
-                'total_debit_today': total_debit_today, # <-- Save the new value
+                'total_debit_today': total_debit_today,
                 'online_sales_today': online_sales_today,
                 'total_expense': total_expense,
                 'total_cash_received': total_cash_received,
@@ -540,7 +541,7 @@ def generate_today_summary_view(request):
         if created:
             messages.success(request, f"Successfully generated financial summary for {today.strftime('%B %d, %Y')}.")
         else:
-            messages.info(request, f"Successfully updated financial summary for {today.strftime('%B %d, %Y')}.")
+            messages.success(request, f"Successfully updated financial summary for {today.strftime('%B %d, %Y')}.")
 
     return redirect('accounts:daily_summary_list')
 

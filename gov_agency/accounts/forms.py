@@ -105,9 +105,20 @@ class CustomAccountForm(forms.ModelForm):
 
 class CustomTransactionEntryForm(forms.ModelForm):
     """Form for adding a debit/credit entry to a CustomAccount ledger."""
+    YES_NO_CHOICES = [
+        (True, 'Yes'),
+        (False, 'No')
+    ]
+
+    store_in_daily_summery = forms.ChoiceField(
+        choices=YES_NO_CHOICES,
+        label="Do You Want To Include It In Daily Summary?",
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
+        # Coerce will convert the form's string value ('True'/'False') back to a Python boolean
+    )
     class Meta:
         model = CustomAccountTransaction
-        fields = ['debit_amount', 'credit_amount', 'notes', 'transaction_date']
+        fields = ['debit_amount', 'credit_amount', 'notes', 'transaction_date', 'store_in_daily_summery']
         widgets = {
             'debit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'value': '0.00'}),
             'credit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'value': '0.00'}),
@@ -122,6 +133,7 @@ class CustomTransactionEntryForm(forms.ModelForm):
         self.fields['transaction_date'].input_formats = ['%Y-%m-%dT%H:%M']
         if not self.instance.pk:
              self.fields['transaction_date'].initial = timezone.now().strftime('%Y-%m-%dT%H:%M')
+             self.fields['store_in_daily_summery'].initial = False
 
     def clean(self):
         cleaned_data = super().clean()

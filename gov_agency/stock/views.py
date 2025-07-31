@@ -12,7 +12,7 @@ from claim.models import Claim
 from gov_agency.models import AdminProfile
 from django.contrib import messages
 from django.db.models  import Q,ProtectedError
-from django.db import transaction # For atomic operations
+from django.db import transaction,IntegrityError# For atomic operations
 from django.http import JsonResponse
 from decimal import Decimal
 from django.db.models import Sum,Count,F, ExpressionWrapper, fields, DecimalField
@@ -83,6 +83,9 @@ def create_product(request):
                 product_instance.save() 
                 messages.success(request, f"Product '{product_instance.name}' added successfully.")
                 return redirect('stock:create_product') 
+            except IntegrityError:
+                messages.error(request, f"A product named '{product_instance.name}' already exists for your account.")
+                form_in_modal_has_errors = True
             except Exception as e:
                 messages.error(request, f"Could not save product. An error occurred: {str(e)}")
                 form_in_modal_has_errors = True
@@ -378,7 +381,7 @@ def sales_processing_view(request):
                         
                         messages.success(request, f"Transaction #{sales_transaction_header.pk} completed successfully!")
                         del request.session[current_transaction_items_session_key] # Clear the cart
-                        return redirect('stock:sales')
+                        return redirect('stock:sale_receipt', sale_pk=sales_transaction_header.pk)
 
                 except ProductDetail.DoesNotExist:
                     messages.error(request, "Error: A product in the transaction could not be found. Transaction cancelled.")
@@ -504,6 +507,56 @@ def all_transactions_list_view(request):
         'transactions': page_obj.object_list, # The transactions for the current page
     }
     return render(request, 'stock/all_transactions_list.html', context)
+
+
+@login_required
+def reverse_sale_prompt_view(request):
+    if request.method == 'POST':
+        sale_id = request.POST.get('sale_id')
+        return redirect('stock:reverse_sale_confirm', sale_id=sale_id)
+    return render(request, 'stock/reverse_sale_prompt.html')
+
+
+@login_required
+def get_sale_info(request, sale_id):
+    try:
+        sale = SalesTransaction.objects.get(pk=sale_id, user=request.user)
+        return JsonResponse({
+            "success": True,
+            "date": sale.transaction_time.strftime("%Y-%m-%d")
+        })
+    except SalesTransaction.DoesNotExist:
+        return JsonResponse({"success": False})
+
+@login_required
+@transaction.atomic
+def confirm_reverse_sale(request, sale_id):
+    sale = get_object_or_404(SalesTransaction, pk=sale_id, user=request.user)
+
+    if request.method == "POST":
+        try:
+            if sale.status != "PENDING_DELIVERY":
+                # 1. Restore Stock
+                for item in sale.items.select_related("product_detail_snapshot"):
+                    item.product_detail_snapshot.increase_stock(item.quantity_sold_decimal)
+
+                # 2. Delete Ledger Entry if it was CREDIT
+                if sale.payment_type == 'CREDIT':
+                    ShopFinancialTransaction.objects.filter(source_sale=sale).delete()
+
+                # 3. Delete Sale Items and Sale
+                sale.items.all().delete()
+                sale.delete()
+
+                messages.success(request, f"Sale #{sale_id} reversed and deleted successfully.")
+                return redirect('stock:all_transactions_list')
+            else:
+                messages.warning(request,"Sale Should not be in pending state if you want ot reverse.")
+        except Exception as e:
+            messages.error(request, f"Error while reversing sale: {str(e)}")
+            return redirect('stock:all_transactions_list')
+
+    return redirect('stock:all_transactions_list')
 
 
 @login_required
@@ -1291,31 +1344,31 @@ def performance_summary_hub_view(request):
 @login_required
 def group_performance_summary_view(request, vehicle_pk=None):
     """
-    DEFINITIVE VERSION: This view calculates all figures dynamically from the
-    SalesTransactionItem records to guarantee accuracy. It correctly subtracts
-    the value and quantity of returned items.
+    DEFINITIVE VERSION 3: This view calculates figures dynamically. It correctly
+    aggregates quantities in Python and formats the output to match the
+    existing template's expectations without requiring HTML changes.
     """
     user = request.user
     
     if vehicle_pk:
-        grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk, user=user)
+        grouping_object = get_object_or_404(Vehicle, pk=vehicle_pk)
         grouping_name = f"Performance Summary for: {grouping_object.vehicle_number}"
-        # Get the primary keys of all transactions for this group
-        transaction_pks = SalesTransaction.objects.filter(
-            user=user, assigned_vehicle=grouping_object
-        ).values_list('pk', flat=True)
+        base_items_query = SalesTransactionItem.objects.filter(
+            transaction__user=user, transaction__assigned_vehicle=grouping_object
+        )
     else:
         grouping_object = None
         grouping_name = "Performance Summary for: Store"
-        transaction_pks = SalesTransaction.objects.filter(
-            user=user, assigned_vehicle__isnull=True
-        ).values_list('pk', flat=True)
+        base_items_query = SalesTransactionItem.objects.filter(
+            transaction__user=user, transaction__assigned_vehicle__isnull=True
+        )
 
-    # Base queryset for all relevant items
-    base_items_query = SalesTransactionItem.objects.filter(transaction_id__in=transaction_pks)
-
+    # Pre-fetch related data for efficiency
+    base_items_query = base_items_query.select_related(
+        'transaction', 'product_detail_snapshot__product_base'
+    )
+    
     # --- Daily Summary Calculation ---
-    # Get all unique days from the item's transaction time
     days_with_sales = base_items_query.annotate(
         day=TruncDate('transaction__transaction_time')
     ).values_list('day', flat=True).distinct().order_by('-day')
@@ -1324,32 +1377,43 @@ def group_performance_summary_view(request, vehicle_pk=None):
     for day in days_with_sales:
         items_on_day = base_items_query.filter(transaction__transaction_time__date=day)
         
-        # --- DYNAMIC NET REVENUE CALCULATION ---
-        # This is the single, correct query for net revenue.
-        # It calculates (dispatched - returned) * price for each item and sums it up.
-        net_revenue_aggregation = items_on_day.aggregate(
-            net_revenue=Sum(
-                (F('quantity_sold_decimal') - F('returned_quantity_decimal')) *
-                F('items_per_master_unit_at_sale') *
-                F('selling_price_per_item'),
-                output_field=DecimalField()
-            )
-        )
-        net_revenue_on_day = net_revenue_aggregation['net_revenue'] or Decimal('0.00')
+        # Calculate net revenue in Python for accuracy
+        net_revenue_on_day = sum(item.gross_line_subtotal for item in items_on_day)
 
-        # --- DYNAMIC NET QUANTITY CALCULATION ---
-        # This correctly groups by packaging and sums the net quantities.
-        quantity_breakdown = items_on_day.values(
-            'product_detail_snapshot__quantity_in_packing',
-            'product_detail_snapshot__unit_of_measure'
-        ).annotate(
-            net_quantity=Sum(F('quantity_sold_decimal') - F('returned_quantity_decimal'))
-        ).order_by('-net_quantity')
+        # --- PYTHON-BASED NET QUANTITY CALCULATION (THE FIX) ---
+        # 1. Group items by their packaging and sum their individual item counts.
+        quantity_agg = defaultdict(int)
+        # Store a reference object for each group to access its properties later
+        ref_objects = {}
+        for item in items_on_day:
+            pd_snapshot = item.product_detail_snapshot
+            # Use the product detail's PK as a simple, hashable key
+            key = pd_snapshot.pk
+            quantity_agg[key] += item.actual_sold_individual_items_count
+            if key not in ref_objects:
+                ref_objects[key] = pd_snapshot
+
+        # 2. Convert the summed individual item counts back to the decimal format.
+        quantity_breakdown = []
+        for pk, total_items in quantity_agg.items():
+            if total_items > 0:
+                # Get the reference ProductDetail object for this group
+                ref_product_detail = ref_objects[pk]
+                
+                # Call the method from the correct model (ProductDetail)
+                net_quantity_decimal = ref_product_detail._get_decimal_from_items(total_items)
+
+                # Format the dictionary EXACTLY as the template expects
+                quantity_breakdown.append({
+                    'net_quantity': net_quantity_decimal,
+                    'product_detail_snapshot__quantity_in_packing': ref_product_detail.quantity_in_packing,
+                    'product_detail_snapshot__unit_of_measure': ref_product_detail.unit_of_measure,
+                })
         
         daily_summary.append({
             'day': day,
             'total_revenue': net_revenue_on_day,
-            'quantity_breakdown': [item for item in quantity_breakdown if item['net_quantity'] > 0]
+            'quantity_breakdown': sorted(quantity_breakdown, key=lambda x: x['net_quantity'], reverse=True)
         })
 
     # --- Monthly Summary Calculation (with the same correct logic) ---
@@ -1364,27 +1428,33 @@ def group_performance_summary_view(request, vehicle_pk=None):
             transaction__transaction_time__month=month.month
         )
         
-        net_revenue_aggregation = items_in_month.aggregate(
-            net_revenue=Sum(
-                (F('quantity_sold_decimal') - F('returned_quantity_decimal')) *
-                F('items_per_master_unit_at_sale') *
-                F('selling_price_per_item'),
-                output_field=DecimalField()
-            )
-        )
-        net_revenue_in_month = net_revenue_aggregation['net_revenue'] or Decimal('0.00')
+        net_revenue_in_month = sum(item.gross_line_subtotal for item in items_in_month)
         
-        quantity_breakdown = items_in_month.values(
-            'product_detail_snapshot__quantity_in_packing',
-            'product_detail_snapshot__unit_of_measure'
-        ).annotate(
-            net_quantity=Sum(F('quantity_sold_decimal') - F('returned_quantity_decimal'))
-        ).order_by('-net_quantity')
+        # --- REPEAT THE SAME PYTHON-BASED NET QUANTITY CALCULATION ---
+        quantity_agg = defaultdict(int)
+        ref_objects = {}
+        for item in items_in_month:
+            pd_snapshot = item.product_detail_snapshot
+            key = pd_snapshot.pk
+            quantity_agg[key] += item.actual_sold_individual_items_count
+            if key not in ref_objects:
+                ref_objects[key] = pd_snapshot
+        
+        quantity_breakdown = []
+        for pk, total_items in quantity_agg.items():
+            if total_items > 0:
+                ref_product_detail = ref_objects[pk]
+                net_quantity_decimal = ref_product_detail._get_decimal_from_items(total_items)
+                quantity_breakdown.append({
+                    'net_quantity': net_quantity_decimal,
+                    'product_detail_snapshot__quantity_in_packing': ref_product_detail.quantity_in_packing,
+                    'product_detail_snapshot__unit_of_measure': ref_product_detail.unit_of_measure,
+                })
 
         monthly_summary.append({
             'month': month,
             'total_revenue': net_revenue_in_month,
-            'quantity_breakdown': [item for item in quantity_breakdown if item['net_quantity'] > 0]
+            'quantity_breakdown': sorted(quantity_breakdown, key=lambda x: x['net_quantity'], reverse=True)
         })
 
     context = {

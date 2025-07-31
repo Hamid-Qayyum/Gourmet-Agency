@@ -4,11 +4,11 @@
 
 {% block extra_head %}
      {{ block.super }} 
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
+    {% comment %} <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script> {% endcomment %}
+    {% comment %} <script>
       tailwind.config = { /* ... your minimal config if any ... */ }
-    </script>
+    </script> {% endcomment %}
     <style>
         .form-errors-daisy { color: hsl(var(--er)); font-size: 0.875rem; margin-top: 0.25rem; }
     </style>

@@ -26,6 +26,7 @@ urlpatterns = [
     path('set-admin-password/', views.set_admin_password_view, name='set_admin_password'),
     path('toggle-admin-mode/', views.toggle_admin_mode_view, name='toggle_admin_mode'),
     path('forgot-admin-password/', views.forgot_admin_password_view, name='forgot_admin_password'),
+    path("admin-mode/deactivate/", views.deactivate_admin_mode, name="deactivate_admin_mode"),
 
 
     path('stock/', include('stock.urls',namespace='stock')),

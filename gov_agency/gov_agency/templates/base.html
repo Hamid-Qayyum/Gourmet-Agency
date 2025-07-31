@@ -15,7 +15,9 @@
     {% block extra_head %}
     {% endblock %}
     <style>
-       
+        .alert-success {
+            background-color: #358F5C;  /* Light green (Tailwind's bg-green-100) */
+          }
     </style>
 </head>
 <body class="bg-base-200 font-sans">
@@ -245,6 +247,19 @@
 
     {% block extra_scripts %}
     <script>
+
+        window.addEventListener("beforeunload", function (e) {
+            fetch("{% url 'deactivate_admin_mode' %}", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+              },
+              body: JSON.stringify({ action: "auto-deactivate" })
+            });
+          });
+
+          
     document.addEventListener('DOMContentLoaded', function() {
     const messagesContainer = document.getElementById('django-messages-container');
      if (messagesContainer) {

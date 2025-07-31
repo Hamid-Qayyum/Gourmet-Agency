@@ -112,46 +112,55 @@
 
 
 
-     <!-- Add Product Detail Modal -->
+    <!-- Add Product Detail Modal -->
     <input type="checkbox" id="add_detail_modal_checkbox" class="modal-toggle" {% if form_had_errors %}checked{% endif %} />
     <div class="modal modal-bottom sm:modal-middle" role="dialog">
-        <div class="modal-box w-11/12 max-w-2xl"> {# Wider modal #}
-            <form method="post" id="addDetailForm" action="{% url 'stock:add_product_details' %}{% if search_query %}?q={{ search_query }}{% endif %}">
-                {% csrf_token %}
-                <h3 class="font-bold text-lg mb-4 text-base-content">Add New Product Stock Detail</h3>
-                
-                {% if form.non_field_errors %}
-                <div role="alert" class="alert alert-error text-sm p-3 mb-3">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <div class="text-error-content">{% for error in form.non_field_errors %}{{ error }}<br>{% endfor %}</div>
-                </div>
-                {% endif %}
+    <div class="modal-box w-full max-w-3xl">
+        <h3 class="font-bold text-xl mb-4 text-base-content">Add New Product Stock Detail</h3>
 
-                {# Render form fields - you can render them individually for more control #}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {% for field in form %}
-                    <div class="form-control w-full">
-                        <label class="label" for="{{ field.id_for_label }}">
-                            <span class="label-text {% if field.field.required %}font-medium{% endif %}">{{ field.label }}</span>
-                        </label>
-                        {{ field }} {# Renders widget with classes from forms.py #}
-                        {% if field.help_text %}
-                            <div class="label"><span class="label-text-alt">{{ field.help_text }}</span></div>
-                        {% endif %}
-                        {% if field.errors %}
-                            <div class="label"><span class="label-text-alt text-error">{% for error in field.errors %}{{ error }}{% endfor %}</span></div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                
-                <div class="modal-action mt-6">
-                    <label id="form_close_button" for="add_detail_modal_checkbox" class="btn btn-ghost">Cancel</label>
-                    <button type="submit" class="btn btn-primary" {% if not user_has_base_products %}disabled{% endif %}>Save Detail</button>
-                </div>
-            </form>
+        <form method="post" id="addDetailForm" action="{% url 'stock:add_product_details' %}{% if search_query %}?q={{ search_query }}{% endif %}">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div role="alert" class="alert alert-error text-sm p-3 mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div class="text-error-content">
+            {% for error in form.non_field_errors %}{{ error }}<br>{% endfor %}
+            </div>
         </div>
-        <label class="modal-backdrop" for="add_detail_modal_checkbox">Close</label>
+        {% endif %}
+
+        <!-- Form fields -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {% for field in form %}
+            <div class="form-control w-full">
+            <label class="label" for="{{ field.id_for_label }}">
+                <span class="label-text font-medium">{{ field.label }}</span>
+            </label>
+            {{ field }}
+            {% if field.help_text %}
+            <span class="label-text-alt">{{ field.help_text }}</span>
+            {% endif %}
+            {% if field.errors %}
+            <span class="label-text-alt text-error">{% for error in field.errors %}{{ error }}{% endfor %}</span>
+            {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Actions -->
+        <div class="modal-action mt-6 flex justify-between">
+            <label id="form_close_button" for="add_detail_modal_checkbox" class="btn btn-ghost">Cancel</label>
+            <button type="submit" class="btn btn-primary" {% if not user_has_base_products %}disabled{% endif %}>
+            Save Detail
+            </button>
+        </div>
+        </form>
+    </div>
+    <label class="modal-backdrop" for="add_detail_modal_checkbox">Close</label>
     </div>
 
     <!-- UPDATE Product Detail Modal (Single, Reusable) -->

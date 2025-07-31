@@ -1,3 +1,4 @@
+from enum import unique
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -10,7 +11,7 @@ from django.db.models import Sum
 
 class AddProduct(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE,  related_name="products")
-    name = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at =models.DateField(auto_now=True)
@@ -20,6 +21,9 @@ class AddProduct(models.Model):
     
     class Meta:
         ordering = ['-created_at'] # Show newest first by default
+        constraints = [
+        models.UniqueConstraint(fields=['user', 'name'], name='unique_product_per_user')
+    ]
 
 
 
