@@ -80,7 +80,7 @@
             <tbody>
                 {% for entry in ledger_entries %}
                 <tr>
-                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
+                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d (h:i:A)" }}</td>
                     <td class="text-xs">{{ entry.notes|default:""|truncatechars:50 }}</td>
                     <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
                     <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>
@@ -133,7 +133,7 @@
                             <label class="label" for="update_{{ field.name }}">
                                 <span class="label-text">{{ field.label }}</span>
                             </label>
-                                     {% with WIDGET_TYPE=field.field.widget.input_type %}
+                        {% with WIDGET_TYPE=field.field.widget.input_type %}
                         {% if WIDGET_TYPE == 'select' %}
                             <select name="{{ field.name }}" id="update_{{ field.name }}" class="{{ field.field.widget.attrs.class|default:'select select-bordered w-full' }}">
                                 {# Loop through the choices for this select field #}
@@ -145,6 +145,8 @@
                             <textarea name="{{ field.name }}" id="update_{{ field.name }}" class="{{ field.field.widget.attrs.class|default:'textarea textarea-bordered w-full' }}"></textarea>
                         {% elif WIDGET_TYPE == 'checkbox' %}
                              <input type="checkbox" name="{{ field.name }}" id="update_{{ field.name }}" class="{{ field.field.widget.attrs.class|default:'checkbox' }}">
+                        {% elif WIDGET_TYPE == 'datetime-local' %}
+                        <input id='update_transaction_date' type="datetime-local" name='transaction_date' class="input input-bordered w-full" readonly>
                         {% else %}
                             <input type="{{ WIDGET_TYPE }}" 
                                    name="{{ field.name }}" 

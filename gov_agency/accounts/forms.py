@@ -123,7 +123,7 @@ class CustomTransactionEntryForm(forms.ModelForm):
             'debit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'value': '0.00'}),
             'credit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'value': '0.00'}),
             'notes': forms.TextInput(attrs={'class': 'input input-bordered w-full', 'placeholder': 'e.g., "Loan given", "Payment for supplies"'}),
-            'transaction_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'input input-bordered w-full'}),
+            'transaction_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'input input-bordered w-full','readonly': 'readonly'}),
         }
 
     def __init__(self, *args, **kwargs):
