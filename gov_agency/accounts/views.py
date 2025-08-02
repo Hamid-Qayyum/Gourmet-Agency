@@ -14,7 +14,7 @@ from stock.models import SalesTransaction
 from expense.models import Expense
 from .models import ShopFinancialTransaction, DailySummary # <-- Import the new model
 from .forms import DateFilterForm 
-
+from gov_agency.decorators import admin_mode_required # Import the custom decorator
 # Import models from both apps
 from stock.models import Vehicle, Shop, SalesTransaction
 from .models import ShopFinancialTransaction
@@ -355,6 +355,7 @@ def custom_account_ledger_view(request, account_pk):
 
 
 @login_required
+@admin_mode_required
 def update_custom_transaction_view(request, pk):
     """Handles the POST submission from the 'Edit Custom Transaction' modal."""
     # Get the 'next' URL for redirection, defaulting to the hub if not provided
@@ -381,6 +382,7 @@ def update_custom_transaction_view(request, pk):
 
 
 @login_required
+@admin_mode_required
 def delete_custom_transaction_view(request, pk):
     """Handles the POST submission from the 'Delete Custom Transaction' confirmation modal."""
     next_url = request.GET.get('next', reverse('accounts:custom_account_hub'))
