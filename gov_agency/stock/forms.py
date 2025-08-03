@@ -379,6 +379,13 @@ class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
             'notes',
             'total_discount_amount' # Include the discount field
         ]
+        widgets = {
+
+            'amount_paid_cash': forms.NumberInput(attrs={'class': 'input', 'placeholder': '0.00','id': 'id_amount_paid_cash'}),
+            'amount_paid_online': forms.NumberInput(attrs={'class': 'input', 'placeholder': '0.00','id': 'id_amount_paid_online'}),
+            'amount_on_credit': forms.NumberInput(attrs={'class': 'input', 'placeholder': '0.00','id': 'id_amount_on_credit'}),
+           
+        }
 
     # Your __init__ and clean methods are perfectly fine and should remain unchanged.
     def __init__(self, *args, **kwargs):
@@ -389,6 +396,10 @@ class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
             self.fields['assigned_vehicle'].queryset = Vehicle.objects.filter(user=user, is_active=True).order_by('vehicle_number')
         self.fields['customer_shop'].empty_label = "--- Select Registered Shop ---"
         self.fields['assigned_vehicle'].empty_label = "--- Select Vehicle (If Needed) ---"
+
+        for field_name in ['amount_paid_cash', 'amount_paid_online', 'amount_on_credit']:
+            self.fields[field_name].required = False
+            self.fields[field_name].initial = None
 
     def clean_total_discount_amount(self):
         discount = self.cleaned_data.get('total_discount_amount')
@@ -403,6 +414,9 @@ class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
         cash = cleaned_data.get('amount_paid_cash') or Decimal('0.00')
         online = cleaned_data.get('amount_paid_online') or Decimal('0.00')
         credit = cleaned_data.get('amount_on_credit') or Decimal('0.00')
+        for field in ['amount_paid_cash', 'amount_paid_online', 'amount_on_credit']:
+            if not cleaned_data.get(field):
+                cleaned_data[field] = Decimal('0.00')
 
         if not customer_shop and not customer_name_manual:
             self.add_error('customer_shop', "Please select a shop or enter a customer name.")

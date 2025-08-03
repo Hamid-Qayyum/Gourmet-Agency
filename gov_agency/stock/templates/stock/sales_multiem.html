@@ -427,9 +427,9 @@ function handlePaymentTypeChange() {
 
     if (selectedType === 'SPLIT') {
         splitPaymentFieldsDiv.classList.remove('hidden');
-        cashInput.value = '0.00';
-        onlineInput.value = '0.00';
-        creditInput.value = '0.00';
+        cashInput.value = '';
+        onlineInput.value = '';
+        creditInput.value = '';
     } else {
         splitPaymentFieldsDiv.classList.add('hidden');
         cashInput.value = (selectedType === 'CASH') ? grandTotal.toFixed(2) : '0.00';

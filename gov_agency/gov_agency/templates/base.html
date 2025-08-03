@@ -248,7 +248,7 @@
     {% block extra_scripts %}
     <script>
 
-        window.addEventListener("beforeunload", function (e) {
+        {% comment %} window.addEventListener("beforeunload", function (e) {
             fetch("{% url 'deactivate_admin_mode' %}", {
               method: "POST",
               headers: {
@@ -257,7 +257,7 @@
               },
               body: JSON.stringify({ action: "auto-deactivate" })
             });
-          });
+          }); {% endcomment %}
 
           
     document.addEventListener('DOMContentLoaded', function() {

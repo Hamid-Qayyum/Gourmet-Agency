@@ -413,7 +413,7 @@ def sales_processing_view(request):
                 except Exception as e:
                     messages.error(request, f"An unexpected error occurred: {str(e)}")
             else:
-                messages.error(request, "Please correct the errors in the final sale details below.")
+                messages.error(request, f"{form_to_validate.errors.as_text()}")
 
     # --- For GET requests or if a POST fails validation ---
     current_transaction_items = request.session.get(current_transaction_items_session_key, [])
