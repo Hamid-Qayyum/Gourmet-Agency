@@ -151,6 +151,7 @@ class SalesTransaction(models.Model):
         ('CASH', 'Cash on Hand'),
         ('ONLINE', 'Online Transfer'),
         ('CREDIT', 'Credit'),
+        ('SPLIT', 'Split Payment'),
     ]
     SALE_STATUS_CHOICES = [
         ('PENDING_ITEMS', 'Pending Items'),     # Cart is being built, not yet finalized
@@ -187,6 +188,10 @@ class SalesTransaction(models.Model):
     # Transaction details
     transaction_time = models.DateTimeField(default=timezone.now)
     payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES, default='CASH')
+    amount_paid_cash = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    amount_paid_online = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    amount_on_credit = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    
     status = models.CharField(max_length=20, choices=SALE_STATUS_CHOICES, default='PENDING_ITEMS')
     
     # Delivery details (if applicable)

@@ -6,26 +6,35 @@
 
 {% block content %}
 <div class="p-4 md:p-6">
-    {# ... Filter and Generate buttons are unchanged ... #}
-    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <!-- Filter Form -->
+       <div class="flex flex-col md:flex-row md:items-end flex-wrap gap-2 mb-6">
+        <!-- Shared Date Picker -->
+        <div>
+            <label for="shared-date-filter" class="label-text font-semibold">Select Date</label>
+            <input type="date" id="shared-date-filter" class="input input-sm input-bordered w-full max-w-xs" required>
+        </div>
+
+        <!-- Filter Form (GET) -->
         <form method="get" action="" class="flex items-end gap-2">
-            <div>
-                <label for="{{ filter_form.date_filter.id_for_label }}" class="label-text">{{ filter_form.date_filter.label }}</label>
-                {{ filter_form.date_filter }}
-            </div>
+            <input type="hidden" name="date_filter" id="filter-hidden-date">
             <button type="submit" class="btn btn-sm btn-primary">Filter</button>
             <a href="{% url 'accounts:daily_summary_list' %}" class="btn btn-sm btn-ghost">Clear</a>
         </form>
 
-        <!-- Generate Summary Button -->
-        <form method="post" action="{% url 'accounts:generate_today_summary' %}">
+        <!-- Generate Specific Date Summary (POST) -->
+        <form method="post" action="{% url 'accounts:generate_specific_date_summary' %}" class="flex items-end gap-2">
             {% csrf_token %}
-            <button type="submit" class="btn btn-accent">Generate/Update Today's Summary</button>
+            <input type="hidden" name="date_filter" id="update-hidden-date">
+            <button type="submit" class="btn btn-sm btn-secondary">Update Selected Date</button>
+        </form>
+
+        <!-- Generate Today Summary (POST) -->
+        <form method="post" action="{% url 'accounts:generate_today_summary' %}" class="flex items-end gap-2">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-accent btn-sm">Generate/Update Today's Summary</button>
         </form>
     </div>
 
-    <!-- Summary List Table -->
+    <!-- Summary Table -->
     <div class="overflow-x-auto bg-base-100 rounded-box shadow">
         <table class="table table-sm w-full">
             <thead>
@@ -36,8 +45,8 @@
                     <th class="text-right">Debit Today</th>
                     <th class="text-right">Online Sales</th>
                     <th class="text-right">Cash Received</th>
-                    <th class="text-right font-bold">Net Settlement</th> <!-- RENAMED & UPDATED -->
-                    <th class="text-right font-bold">Net Physical Cash</th> <!-- NEW -->
+                    <th class="text-right font-bold">Net Settlement</th>
+                    <th class="text-right font-bold">Net Physical Cash</th>
                     <th class="text-center">Actions</th>
                 </tr>
             </thead>
@@ -51,12 +60,10 @@
                     <td class="text-right text-purple-500">- Rs {{ summary.online_sales_today|floatformat:2|intcomma }}</td>
                     <td class="text-right text-cyan-500">+ Rs {{ summary.total_cash_received|floatformat:2|intcomma }}</td>
                     
-                    <!-- Total Settlement (Including Online) -->
                     <td class="text-right font-bold text-lg {% if summary.net_total_settlement > 0 %}text-success{% else %}text-error{% endif %}">
                         Rs {{ summary.net_total_settlement|floatformat:2|intcomma }}
                     </td>
 
-                    <!-- Physical Cash Only -->
                     <td class="text-right font-bold text-lg {% if summary.net_physical_cash > 0 %}text-success{% else %}text-error{% endif %}">
                         Rs {{ summary.net_physical_cash|floatformat:2|intcomma }}
                     </td>
@@ -66,7 +73,7 @@
                     </td>
                 </tr>
 
-                <!-- Delete Confirmation Modal for each row -->
+                <!-- Delete Confirmation Modal -->
                 <input type="checkbox" id="delete_modal_{{ summary.pk }}" class="modal-toggle" />
                 <div class="modal" role="dialog">
                     <div class="modal-box">
@@ -93,4 +100,37 @@
         </table>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sharedDateInput = document.getElementById('shared-date-filter');
+    const filterHiddenInput = document.getElementById('filter-hidden-date');
+    const updateHiddenInput = document.getElementById('update-hidden-date');
+
+    function syncDateToHiddenFields() {
+        const dateValue = sharedDateInput.value;
+        if (filterHiddenInput) filterHiddenInput.value = dateValue;
+        if (updateHiddenInput) updateHiddenInput.value = dateValue;
+    }
+
+    if (sharedDateInput) {
+        sharedDateInput.addEventListener('input', syncDateToHiddenFields);
+
+         // Set default date (today) if empty
+        if (!sharedDateInput.value) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const preservedDate = urlParams.get("date_filter");
+
+            if (preservedDate) {
+                sharedDateInput.value = preservedDate;
+                syncDateToHiddenFields();
+            }
+        } 
+
+    }
+});
+</script>
 {% endblock %}

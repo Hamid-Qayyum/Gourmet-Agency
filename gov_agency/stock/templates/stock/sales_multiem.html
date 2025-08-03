@@ -136,10 +136,10 @@
                             <label class="label" for="{{ finalize_sale_form.customer_name_manual.id_for_label }}"><span class="label-text">{{ finalize_sale_form.customer_name_manual.label }}</span></label>
                             {{ finalize_sale_form.customer_name_manual }}
                         </div>
-                        <div class="form-control w-full">
+                        {% comment %} <div class="form-control w-full">
                             <label class="label" for="{{ finalize_sale_form.payment_type.id_for_label }}"><span class="label-text font-medium">{{ finalize_sale_form.payment_type.label }}</span></label>
                             {{ finalize_sale_form.payment_type }}
-                        </div>
+                        </div> {% endcomment %}
                         <div class="form-control w-full flex flex-row items-center space-x-2 py-2">
                             {{ finalize_sale_form.needs_vehicle }}
                             <label class="label cursor-pointer" for="{{ finalize_sale_form.needs_vehicle.id_for_label }}"><span class="label-text font-medium">{{ finalize_sale_form.needs_vehicle.label }}</span></label>
@@ -152,6 +152,34 @@
                             <label class="label" for="{{ finalize_sale_form.notes.id_for_label }}"><span class="label-text">{{ finalize_sale_form.notes.label }}</span></label>
                             {{ finalize_sale_form.notes }}
                         </div>
+
+
+                        <!-- <-------------------- START OF HIGHLIGHTED CHANGES -------------------->
+                        <div class="divider">Payment Details</div>
+
+                        <!-- Payment Type (The main selector) -->
+                        <div class="form-control w-full">
+                            <label class="label" for="{{ finalize_sale_form.payment_type.id_for_label }}"><span class="label-text font-medium">{{ finalize_sale_form.payment_type.label }}</span></label>
+                            {{ finalize_sale_form.payment_type }}
+                        </div>
+                        
+                        <!-- Split Payment Amount Fields (conditionally shown) -->
+                        <div id="split_payment_fields" class="form-grid hidden">
+                             <div class="form-control w-full">
+                                <label class="label" for="{{ finalize_sale_form.amount_paid_cash.id_for_label }}"><span class="label-text">Amount Paid (Cash)</span></label>
+                                {{ finalize_sale_form.amount_paid_cash }}
+                            </div>
+                            <div class="form-control w-full">
+                                <label class="label" for="{{ finalize_sale_form.amount_paid_online.id_for_label }}"><span class="label-text">Amount Paid (Online)</span></label>
+                                {{ finalize_sale_form.amount_paid_online }}
+                            </div>
+                            <div class="form-control w-full">
+                                <label class="label" for="{{ finalize_sale_form.amount_on_credit.id_for_label }}"><span class="label-text">Amount on Credit</span></label>
+                                {{ finalize_sale_form.amount_on_credit }}
+                                {% if finalize_sale_form.amount_on_credit.errors %}<p class="text-error text-xs mt-1">{{ finalize_sale_form.amount_on_credit.errors|join:", " }}</p>{% endif %}
+                            </div>
+                        </div>
+                        <!-- <--------------------- END OF HIGHLIGHTED CHANGES --------------------->
                         
                         <!-- CHANGE 3: NEW financial summary section is ADDED here -->
                         <div class="divider"></div>
@@ -169,6 +197,18 @@
                                 <span>Grand Total:</span>
                                 <span id="summary-grand-total" class="text-success">Rs {{ current_transaction_subtotal|floatformat:2|intcomma }}</span>
                             </div>
+
+                              <!-- <-------------------- START OF HIGHLIGHTED CHANGES -------------------->
+                            <div class="flex justify-between text-md pt-2">
+                                <span>Payments Entered:</span>
+                                <span id="summary-total-paid" class="font-semibold">Rs 0.00</span>
+                            </div>
+                            <div class="flex justify-between text-md">
+                                <span>Remaining Due:</span>
+                                <span id="summary-remaining" class="font-semibold text-warning">Rs 0.00</span>
+                            </div>
+                            <!-- <--------------------- END OF HIGHLIGHTED CHANGES --------------------->
+
                         </div>
                         {% if finalize_sale_form.non_field_errors %}<div role="alert" class="alert alert-error text-sm p-3 my-4"><div>{% for e in finalize_sale_form.non_field_errors %}{{e}}<br>{%endfor%}</div></div>{% endif %}
                         <div class="card-actions justify-end mt-6">
@@ -341,6 +381,77 @@ document.addEventListener('DOMContentLoaded', function () {
     if (pricePerCartonInput) {
         pricePerCartonInput.addEventListener('input', updateIndividualPrice);
     }
+    // --- SECTION 4: NEW JAVASCRIPT FOR SPLIT PAYMENTS ---
+const paymentTypeSelect = document.getElementById('id_payment_type'); // Django default ID for the ChoiceField
+const splitPaymentFieldsDiv = document.getElementById('split_payment_fields');
+
+const cashInput = document.getElementById('id_amount_paid_cash');
+const onlineInput = document.getElementById('id_amount_paid_online');
+const creditInput = document.getElementById('id_amount_on_credit');
+
+const totalPaidEl = document.getElementById('summary-total-paid');
+const remainingEl = document.getElementById('summary-remaining');
+
+function updatePaymentSummary() {
+    if (!cashInput || !onlineInput || !creditInput || !totalPaidEl || !remainingEl || !grandTotalEl) return;
+
+    const cash = parseFloat(cashInput.value) || 0;
+    const online = parseFloat(onlineInput.value) || 0;
+    const credit = parseFloat(creditInput.value) || 0;
+
+    const grandTotalText = grandTotalEl.textContent.replace(/[^0-9.-]+/g,"");
+    const grandTotal = parseFloat(grandTotalText) || 0;
+
+    const totalPaid = cash + online + credit;
+    const remaining = grandTotal - totalPaid;
+
+    totalPaidEl.textContent = `Rs ${totalPaid.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    remainingEl.textContent = `Rs ${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+    remainingEl.classList.remove('text-warning', 'text-error', 'text-success');
+    if (Math.abs(remaining) < 0.01) {
+        remainingEl.classList.add('text-success');
+    } else if (remaining < 0) {
+        remainingEl.classList.add('text-error');
+    } else {
+        remainingEl.classList.add('text-warning');
+    }
+}
+
+function handlePaymentTypeChange() {
+    if (!paymentTypeSelect || !splitPaymentFieldsDiv) return;
+
+    const selectedType = paymentTypeSelect.value;
+    const grandTotalText = grandTotalEl.textContent.replace(/[^0-9.-]+/g,""); // ✅ fixed here
+    const grandTotal = parseFloat(grandTotalText) || 0;
+
+    if (selectedType === 'SPLIT') {
+        splitPaymentFieldsDiv.classList.remove('hidden');
+        cashInput.value = '0.00';
+        onlineInput.value = '0.00';
+        creditInput.value = '0.00';
+    } else {
+        splitPaymentFieldsDiv.classList.add('hidden');
+        cashInput.value = (selectedType === 'CASH') ? grandTotal.toFixed(2) : '0.00';
+        onlineInput.value = (selectedType === 'ONLINE') ? grandTotal.toFixed(2) : '0.00';
+        creditInput.value = (selectedType === 'CREDIT') ? grandTotal.toFixed(2) : '0.00';
+    }
+    updatePaymentSummary();
+}
+
+// Event listeners
+if (paymentTypeSelect) {
+    paymentTypeSelect.addEventListener('change', handlePaymentTypeChange);
+}
+if (discountInput) {
+    discountInput.addEventListener('input', updatePaymentSummary);
+}
+[cashInput, onlineInput, creditInput].forEach(input => {
+    if (input) input.addEventListener('input', updatePaymentSummary);
+});
+
+// Initial state
+handlePaymentTypeChange();
 });
 </script>
 {% endblock %}

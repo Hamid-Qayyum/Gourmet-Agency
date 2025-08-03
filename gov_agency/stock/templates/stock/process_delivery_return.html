@@ -2,6 +2,12 @@
 {% block title %}Process Delivery - Tx #{{ transaction.pk }}{% endblock %}
 {% block page_title %}Process Delivery & Returns for Transaction #{{ transaction.pk }}{% endblock %}
 
+{% block extra_head %}{{block.super}}
+<style>
+    /*#delivery_split_payment_fields { display: none; } /* Hide split payment fields by default */
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="p-4 md:p-6 max-w-3xl mx-auto">
     <div class="card bg-base-100 shadow-xl">
@@ -12,76 +18,43 @@
                 <p><strong>Customer:</strong> {{ transaction.customer_shop.name|default:transaction.customer_name_manual|default:"N/A" }}</p>
                 <p><strong>Transaction Date:</strong> {{ transaction.transaction_time|date:"Y-m-d H:i" }}</p>
                 <p><strong>Assigned Vehicle:</strong> {{ transaction.assigned_vehicle.vehicle_number|default:"N/A" }}</p>
-                <p><strong>Current Payment Type:</strong> {{ transaction.get_payment_type_display }}</p>
+                <p><strong>Initial Payment Method:</strong> {{ transaction.get_payment_type_display }}</p>
             </div>
 
             <form method="POST" action="{% url 'stock:process_delivery_return' sale_pk=transaction.pk %}">
                 {% csrf_token %}
                 
                 <h3 class="text-lg font-semibold mb-2">1. Record Item Returns</h3>
-                <p class="text-xs text-base-content/70 mb-4">
-                    For each item below, enter the quantity returned by the customer (e.g., 0.2 for 2 items).
-                </p>
-
-                {{ return_formset.management_form }} {# Important for formset #}
-                {% if return_formset.non_form_errors %}
-                    <div role="alert" class="alert alert-error text-sm p-3 mb-4">
-                        <div>{% for error in return_formset.non_form_errors %}{{ error }}{% endfor %}</div>
-                    </div>
-                {% endif %}
-
+                {{ return_formset.management_form }}
                 <div class="space-y-4">
-                {% for form_item in return_formset %} {# Changed from formset to return_formset #}
+                {% for form_item in return_formset %}
                     <div class="p-3 border border-base-300 rounded-lg">
-                        {{ form_item.id }} {# Hidden ID field #}
+                        {{ form_item.id }}
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                            <div class="form-control w-full md:col-span-2">
-                                {{ form_item.product_display.label_tag }}
-                                {{ form_item.product_display }}
-                            </div>
-                            <div class="form-control w-full">
-                                {{ form_item.dispatched_quantity_display.label_tag }}
-                                {{ form_item.dispatched_quantity_display }}
-                            </div>
-                            <div class="form-control w-full md:col-span-3">
-                                {{ form_item.returned_quantity_decimal.label_tag }}
-                                {{ form_item.returned_quantity_decimal }}
-                                {% if form_item.returned_quantity_decimal.errors %}
-                                    <p class="text-error text-xs mt-1">{{ form_item.returned_quantity_decimal.errors|join:", " }}</p>
-                                {% endif %}
-                            </div>
+                            <div class="form-control w-full md:col-span-2">{{ form_item.product_display.label_tag }}{{ form_item.product_display }}</div>
+                            <div class="form-control w-full">{{ form_item.dispatched_quantity_display.label_tag }}{{ form_item.dispatched_quantity_display }}</div>
+                            <div class="form-control w-full md:col-span-3">{{ form_item.returned_quantity_decimal.label_tag }}{{ form_item.returned_quantity_decimal }}{% if form_item.returned_quantity_decimal.errors %}<p class="text-error text-xs mt-1">{{ form_item.returned_quantity_decimal.errors|join:", " }}</p>{% endif %}</div>
                         </div>
-                         {% if form_item.non_field_errors %}
-                            <div role="alert" class="alert alert-warning alert-sm text-xs p-2 mt-2">
-                                {% for error in form_item.non_field_errors %}{{ error }}{% endfor %}
-                            </div>
-                        {% endif %}
                     </div>
                 {% endfor %}
                 </div>
 
                 <div class="divider my-8"></div>
 
-                <h3 class="font-bold text-lg mb-4">2. Confirm Final Details</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="form-control w-full">
-                        <label class="label" for="{{ payment_form.payment_type.id_for_label }}">
-                            <span class="label-text">{{ payment_form.payment_type.label }}</span>
-                        </label>
-                        {{ payment_form.payment_type }}
-                        {% if payment_form.payment_type.errors %}<div class="text-error text-xs mt-1">{{ payment_form.payment_type.errors|join:", " }}</div>{% endif %}
-                    </div>
-                    
-                    <!-- NEW: Discount Field -->
-                    <div class="form-control w-full">
-                        <label class="label" for="{{ payment_form.total_discount_amount.id_for_label }}">
-                            <span class="label-text font-semibold">{{ payment_form.total_discount_amount.label }}</span>
-                        </label>
-                        {{ payment_form.total_discount_amount }}
-                        {% if payment_form.total_discount_amount.errors %}<div class="text-error text-xs mt-1">{{ payment_form.total_discount_amount.errors|join:", " }}</div>{% endif %}
-                    </div>
+                <h3 class="font-bold text-lg mb-4">2. Finalize Payment & Discount</h3>
+                <div class="alert alert-info mb-6"><div><span>Final Amount Due (after returns): <strong class="text-xl" id="final_amount_due_display">Calculating...</strong></span></div></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control w-full">{{ delivery_form.payment_type.label_tag }}{{ delivery_form.payment_type }}</div>
+                    <div class="form-control w-full">{{ delivery_form.total_discount_amount.label_tag }}{{ delivery_form.total_discount_amount }}</div>
                 </div>
-                {% if payment_form.non_field_errors %}<div class="text-error text-sm mt-2">{{ payment_form.non_field_errors }}</div>{% endif %}
+                
+                <div id="delivery_split_payment_fields" class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 ">
+                     <div class="form-control w-full">{{ delivery_form.amount_paid_cash.label_tag }}{{ delivery_form.amount_paid_cash }}</div>
+                    <div class="form-control w-full">{{ delivery_form.amount_paid_online.label_tag }}{{ delivery_form.amount_paid_online }}</div>
+                    <div class="form-control w-full">{{ delivery_form.amount_on_credit.label_tag }}{{ delivery_form.amount_on_credit }}</div>
+                </div>
+
+                {% if delivery_form.non_field_errors %}<div class="alert alert-error text-sm mt-4"><span>{{ delivery_form.non_field_errors }}</span></div>{% endif %}
 
                 <div class="card-actions justify-end mt-8 space-x-3">
                     <a href="{% url 'stock:pending_deliveries' %}" class="btn btn-ghost">Cancel</a>
@@ -91,4 +64,80 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const finalAmountDueEl = document.getElementById('final_amount_due_display');
+    const returnInputs = document.querySelectorAll('input[name$="-returned_quantity_decimal"]');
+    const discountInput = document.getElementById('delivery_discount_amount');
+    const paymentTypeSelect = document.getElementById('delivery_payment_type');
+    const splitPaymentDiv = document.getElementById('delivery_split_payment_fields');
+    const cashInput = document.getElementById('delivery_amount_cash');
+    const onlineInput = document.getElementById('delivery_amount_online');
+    const creditInput = document.getElementById('delivery_amount_credit');
+
+    const initialItemData = [];
+    {% for item in transaction.items.all %}
+    initialItemData.push({
+        dispatchedDecimal: parseFloat('{{ item.quantity_sold_decimal }}'),
+        price: parseFloat('{{ item.selling_price_per_item }}'),
+        itemsPerMu: parseInt('{{ item.items_per_master_unit_at_sale }}', 10)
+    });
+    {% endfor %}
+
+    function getItemsFromDecimal(decimalQty, itemsPerMu) {
+        if (isNaN(decimalQty) || isNaN(itemsPerMu) || itemsPerMu <= 0) return 0;
+        const fullUnits = Math.trunc(decimalQty);
+        const looseItems = Math.round((decimalQty % 1) * 100);
+        return (fullUnits * itemsPerMu) + looseItems;
+    }
+
+    function calculateFinalAmount() {
+        let grossSubtotalAfterReturns = 0;
+        document.querySelectorAll('.p-3.border').forEach((row, index) => {
+            if (!initialItemData[index]) return;
+            const dispatchedQty = initialItemData[index].dispatchedDecimal;
+            const price = initialItemData[index].price;
+            const itemsPerMu = initialItemData[index].itemsPerMu;
+            const returnInput = row.querySelector('input[name$="-returned_quantity_decimal"]');
+            const returnedQty = parseFloat(returnInput.value) || 0;
+            const dispatchedItems = getItemsFromDecimal(dispatchedQty, itemsPerMu);
+            const returnedItems = getItemsFromDecimal(returnedQty, itemsPerMu);
+            const netSoldItems = Math.max(0, dispatchedItems - returnedItems);
+            grossSubtotalAfterReturns += netSoldItems * price;
+        });
+
+        const discount = parseFloat(discountInput.value) || 0;
+        const finalTotal = grossSubtotalAfterReturns - discount;
+
+        finalAmountDueEl.textContent = `Rs ${finalTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        handleDeliveryPaymentTypeChange();
+    }
+    
+    function handleDeliveryPaymentTypeChange() {
+        if (!paymentTypeSelect) return;
+        const selectedType = paymentTypeSelect.value;
+        const finalAmountText = finalAmountDueEl.textContent.replace(/[^0-9.-]+/g,"");
+        const finalAmount = parseFloat(finalAmountText) || 0;
+
+        if (selectedType === 'SPLIT') {
+            splitPaymentDiv.classList.remove('hidden');
+        } else {
+            splitPaymentDiv.classList.add('hidden');
+            cashInput.value = (selectedType === 'CASH') ? finalAmount.toFixed(2) : '0.00';
+            onlineInput.value = (selectedType === 'ONLINE') ? finalAmount.toFixed(2) : '0.00';
+            creditInput.value = (selectedType === 'CREDIT') ? finalAmount.toFixed(2) : '0.00';
+        }
+    }
+
+    returnInputs.forEach(input => input.addEventListener('input', calculateFinalAmount));
+    if (discountInput) discountInput.addEventListener('input', calculateFinalAmount);
+    if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handleDeliveryPaymentTypeChange);
+    
+    calculateFinalAmount(); // Initial call on page load
+});
+</script>
 {% endblock %}

@@ -1,7 +1,7 @@
 from django.shortcuts import render,redirect, get_object_or_404
-from .forms import RegisterForm, AddProductForm, ProductDetailForm,VehicleForm, ShopForm,ProcessReturnForm
+from .forms import RegisterForm, AddProductForm, ProductDetailForm,VehicleForm, ShopForm,ProcessReturnForm,ProcessDeliveryForm
 from .forms import SalesTransactionItemReturnForm,AddItemToSaleForm,FinalizeSaleForm,SalesTransactionItemReturnFormSet # Import the formset
-from .forms import UpdatePaymentTypeForm, AddStockForm
+from .forms import  AddStockForm #,UpdatePaymentTypeForm
 from django.contrib.auth import login, logout
 from .utils import authenticate 
 from django.contrib.auth.models import User 
@@ -30,7 +30,7 @@ from expense.models import Expense
 from django.db.models.functions import TruncDate,TruncMonth
 from collections import defaultdict
 from gov_agency.decorators import admin_mode_required
-
+from django import forms
 
 
 # Create your views here.
@@ -337,24 +337,50 @@ def sales_processing_view(request):
                 messages.warning(request, "Cannot complete an empty transaction.")
                 return redirect('stock:sales')
 
-            finalize_sale_form = FinalizeSaleForm(request.POST, user=request.user)
-            if finalize_sale_form.is_valid():
+            # We use a new variable name here to avoid confusion with the empty form instance
+            form_to_validate = FinalizeSaleForm(request.POST, user=request.user)
+            if form_to_validate.is_valid():
                 try:
                     with transaction.atomic():
-                        # Create the SalesTransaction header instance from the form
-                        # This automatically includes the new 'total_discount_amount'
-                        sales_transaction_header = finalize_sale_form.save(commit=False)
+                        # 1. CALCULATE GRAND TOTAL FROM SESSION DATA
+                        gross_subtotal = sum(Decimal(item['line_subtotal']) for item in current_items)
+                        discount = form_to_validate.cleaned_data.get('total_discount_amount') or Decimal('0.00')
+                        grand_total = (gross_subtotal - discount).quantize(Decimal('0.01'))
+
+                        # 2. GET ALL PAYMENT-RELATED DATA FROM THE FORM
+                        payment_type = form_to_validate.cleaned_data.get('payment_type')
+                        cash = form_to_validate.cleaned_data.get('amount_paid_cash') or Decimal('0.00')
+                        online = form_to_validate.cleaned_data.get('amount_paid_online') or Decimal('0.00')
+                        credit = form_to_validate.cleaned_data.get('amount_on_credit') or Decimal('0.00')
+
+                        # 3. CREATE THE TRANSACTION INSTANCE (but don't save yet)
+                        sales_transaction_header = form_to_validate.save(commit=False)
                         sales_transaction_header.user = request.user
                         sales_transaction_header.status = 'PENDING_DELIVERY' if sales_transaction_header.needs_vehicle else 'COMPLETED'
-                        sales_transaction_header.save() # First save to get a primary key
+                        
+                        # 4. HANDLE PAYMENT LOGIC (Single vs. Split)
+                        if payment_type == 'SPLIT':
+                            # For split payments, validate that the sum matches the grand total
+                            if (cash + online + credit).quantize(Decimal('0.01')) != grand_total:
+                                raise forms.ValidationError(f"Split payments (Rs {cash + online + credit}) do not match Grand Total (Rs {grand_total}).")
+                            # The amounts from the form are already correct on the instance
+                        else:
+                            # For single payments, we override the amount fields
+                            sales_transaction_header.amount_paid_cash = grand_total if payment_type == 'CASH' else Decimal('0.00')
+                            sales_transaction_header.amount_paid_online = grand_total if payment_type == 'ONLINE' else Decimal('0.00')
+                            sales_transaction_header.amount_on_credit = grand_total if payment_type == 'CREDIT' else Decimal('0.00')
+                        
+                        # Set grand totals manually before saving
+                        sales_transaction_header.grand_total_revenue = grand_total
+                        # grand_total_cost will be calculated later
 
-                        # Loop through items in session to create SalesTransactionItem objects
+                        sales_transaction_header.save() # First save to get a PK
+
+                        # 5. CREATE SALE ITEMS AND DECREASE STOCK (Unchanged logic)
                         for item_data in current_items:
                             pd_batch = ProductDetail.objects.select_for_update().get(pk=item_data['product_detail_id'])
-                            
                             if not pd_batch.decrease_stock(Decimal(item_data['quantity_decimal'])):
                                 raise Exception(f"Stock update failed for {pd_batch}. Transaction rolled back.")
-
                             SalesTransactionItem.objects.create(
                                 transaction=sales_transaction_header,
                                 product_detail_snapshot=pd_batch,
@@ -363,19 +389,18 @@ def sales_processing_view(request):
                                 cost_price_per_item_at_sale=Decimal(item_data['cost_price_per_item']),
                             )
                         
-                        # After creating all items, call the method to calculate final totals
-                        sales_transaction_header.update_grand_totals()
-                        sales_transaction_header.refresh_from_db()
-
-                        # Create a ledger entry if the payment type is CREDIT
-                        if sales_transaction_header.payment_type == 'CREDIT':
+                        # 6. UPDATE GRAND TOTALS (especially grand_total_cost) AND CREATE LEDGER ENTRY
+                        sales_transaction_header.update_grand_totals() # This will calculate and save the cost
+                        
+                        # Create a ledger entry if there is a credit amount
+                        if sales_transaction_header.amount_on_credit > 0:
                             ShopFinancialTransaction.objects.create(
                                 shop=sales_transaction_header.customer_shop,
                                 customer_name_snapshot=sales_transaction_header.customer_name_manual,
                                 user=request.user,
                                 source_sale=sales_transaction_header,
                                 transaction_type='CREDIT_SALE',
-                                debit_amount=sales_transaction_header.grand_total_revenue, # This is now the final, discounted amount
+                                debit_amount=sales_transaction_header.amount_on_credit,
                                 notes=f"Credit from Sale Transaction #{sales_transaction_header.pk}"
                             )
                         
@@ -759,70 +784,68 @@ def pending_deliveries_view(request):
 def process_delivery_return_view(request, sale_pk):
     """
     Handles the processing of returns and final settlement for a sales transaction.
-    This view correctly updates returned quantities, stock, discount amount, totals,
-    status, and financial ledger entries in the correct logical order.
     """
-    # Get the single source-of-truth object for this transaction at the start.
     sales_transaction = get_object_or_404(
         SalesTransaction, 
         pk=sale_pk, 
         user=request.user, 
         status__in=['PENDING_DELIVERY', 'PARTIALLY_RETURNED']
     )
-    
-    # The queryset for the formset is based on this single transaction instance.
     items_queryset = SalesTransactionItem.objects.filter(transaction=sales_transaction)
 
     if request.method == 'POST':
-        # Initialize forms with POST data and the correct instances.
         return_formset = SalesTransactionItemReturnFormSet(request.POST, queryset=items_queryset)
-        payment_form = UpdatePaymentTypeForm(request.POST, instance=sales_transaction)
+        delivery_form = ProcessDeliveryForm(request.POST, instance=sales_transaction)
 
-        if return_formset.is_valid() and payment_form.is_valid():
+        if return_formset.is_valid() and delivery_form.is_valid():
             try:
                 with transaction.atomic():
-                    # --- Step 1: Update Item Returns and Adjust Stock ---
-                    # Loop through each item form. If it has changed, update the returned quantity
-                    # and adjust the stock of the corresponding ProductDetail.
-                    for form in return_formset:
-                        if form.has_changed() and 'returned_quantity_decimal' in form.changed_data:
-                            # Use form.save(commit=False) to get the instance with the new data without saving yet.
-                            item_instance = form.save(commit=False)
+                    # --- Step 1: Process Item Returns and Update Stock ---
+                    # Loop through each item form to calculate stock changes
+                    for form_item in return_formset:
+                        if form_item.has_changed() and 'returned_quantity_decimal' in form_item.changed_data:
+                            item_instance = form_item.instance
+                            original_returned = item_instance.returned_quantity_decimal
+                            new_returned = form_item.cleaned_data['returned_quantity_decimal']
+                            stock_diff = new_returned - original_returned
                             
-                            # Fetch the original state from the DB to calculate the stock change
-                            original_item = SalesTransactionItem.objects.get(pk=item_instance.pk)
-                            stock_change_difference = item_instance.returned_quantity_decimal - original_item.returned_quantity_decimal
-                            
-                            if stock_change_difference != Decimal('0.0'):
-                                product_detail_to_update = item_instance.product_detail_snapshot
-                                if stock_change_difference > 0: # More items returned
-                                    product_detail_to_update.increase_stock(stock_change_difference)
-                                else: # A return was undone (less common)
-                                    product_detail_to_update.decrease_stock(abs(stock_change_difference))
-                            
-                            # Save the item, but tell it NOT to update the parent transaction yet.
-                            # This prevents premature calculations.
-                            item_instance.save(update_parent=False)
-
-                    # --- Step 2: Apply Final Form Data to the Transaction Object ---
-                    # Get the final payment type and the NEW discount amount from the form.
-                    new_payment_type = payment_form.cleaned_data['payment_type']
-                    new_discount_amount = payment_form.cleaned_data['total_discount_amount']
-
-                    # Apply these new values directly to our main transaction object in memory.
-                    sales_transaction.payment_type = new_payment_type
-                    sales_transaction.total_discount_amount = new_discount_amount
+                            product_detail = item_instance.product_detail_snapshot
+                            if stock_diff > 0:
+                                product_detail.increase_stock(stock_diff)
+                            elif stock_diff < 0:
+                                product_detail.decrease_stock(abs(stock_diff))
                     
-                    # --- Step 3: Trigger a SINGLE, FINAL Recalculation ---
-                    # Now, call update_grand_totals. It will use the correct item returns (from Step 1)
-                    # and the new discount amount (from Step 2) to perform a perfect calculation.
-                    # This method saves the new grand_total_revenue and grand_total_cost.
-                    sales_transaction.update_grand_totals()
-                    
-                    # --- Step 4: Update the Transaction Status ---
-                    # We must refresh the object from the DB to get the freshly calculated totals.
+                    # Save all item return changes at once
+                    return_formset.save()
+
+                    # --- Step 2: Recalculate Grand Totals ---
+                    # Important: Use the discount from the *validated form*, not the old instance
+                    new_discount_amount = delivery_form.cleaned_data.get('total_discount_amount') or Decimal('0.00')
+                    # Call update_grand_totals with the new discount amount
+                    sales_transaction.update_grand_totals(new_discount_amount=new_discount_amount)
                     sales_transaction.refresh_from_db()
+                    final_grand_total = sales_transaction.grand_total_revenue
 
+                    # --- Step 3: Process and Validate Final Payment Details ---
+                    payment_type = delivery_form.cleaned_data['payment_type']
+                    cash = delivery_form.cleaned_data.get('amount_paid_cash') or Decimal('0.00')
+                    online = delivery_form.cleaned_data.get('amount_paid_online') or Decimal('0.00')
+                    credit = delivery_form.cleaned_data.get('amount_on_credit') or Decimal('0.00')
+
+                    if payment_type == 'SPLIT':
+                        if (cash + online + credit).quantize(Decimal('0.01')) != final_grand_total.quantize(Decimal('0.01')):
+                            raise forms.ValidationError(f"Split payments (Rs {cash + online + credit}) do not match the final Grand Total (Rs {final_grand_total}).")
+                        sales_transaction.amount_paid_cash = cash
+                        sales_transaction.amount_paid_online = online
+                        sales_transaction.amount_on_credit = credit
+                    else: # Single payment type
+                        sales_transaction.amount_paid_cash = final_grand_total if payment_type == 'CASH' else Decimal('0.00')
+                        sales_transaction.amount_paid_online = final_grand_total if payment_type == 'ONLINE' else Decimal('0.00')
+                        sales_transaction.amount_on_credit = final_grand_total if payment_type == 'CREDIT' else Decimal('0.00')
+                    
+                    sales_transaction.payment_type = payment_type
+                    
+                    # --- Step 4: Update Transaction Status ---
                     final_items = sales_transaction.items.all()
                     total_dispatched = sum(item.dispatched_individual_items_count for item in final_items)
                     total_returned = sum(item.returned_individual_items_count for item in final_items)
@@ -834,52 +857,51 @@ def process_delivery_return_view(request, sale_pk):
                     else:
                         sales_transaction.status = 'PARTIALLY_RETURNED'
                     
-                    # --- Step 5: Perform the FINAL save to the database ---
-                    # This saves the status and permanently stores the new payment type and discount.
-                    sales_transaction.save(
-                        update_fields=[
-                            'status', 
-                            'payment_type', 
-                            'total_discount_amount'
-                        ]
-                    )
+                    # --- Step 5: Perform the FINAL save ---
+                    sales_transaction.save()
 
                     # --- Step 6: Update Financial Ledger Entry ---
-                    # This logic will now work correctly as it uses the final, correct transaction state.
+                    # (Your existing logic for ShopFinancialTransaction is correct)
                     existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=sales_transaction).first()
-                    if sales_transaction.payment_type == 'CREDIT' and sales_transaction.customer_shop:
-                        final_revenue = sales_transaction.grand_total_revenue
+                    if sales_transaction.amount_on_credit > 0 and sales_transaction.customer_shop:
                         if existing_credit_entry:
-                            existing_credit_entry.debit_amount = final_revenue
-                            existing_credit_entry.save(update_fields=['debit_amount'])
+                            existing_credit_entry.debit_amount = sales_transaction.amount_on_credit
+                            existing_credit_entry.save()
                         else:
                             ShopFinancialTransaction.objects.create(
                                 shop=sales_transaction.customer_shop, user=request.user,
                                 source_sale=sales_transaction, transaction_type='CREDIT_SALE',
-                                debit_amount=final_revenue
+                                debit_amount=sales_transaction.amount_on_credit
                             )
-                    elif sales_transaction.payment_type != 'CREDIT' and existing_credit_entry:
+                    elif existing_credit_entry:
                         existing_credit_entry.delete()
 
                     messages.success(request, f"Delivery for Transaction #{sales_transaction.pk} processed successfully.")
                     return redirect('stock:pending_deliveries')
 
+            # This `except` block is now correctly indented
+            except forms.ValidationError as e:
+                delivery_form.add_error(None, e)
+                messages.error(request, str(e.message))
             except Exception as e:
                 messages.error(request, f"A critical error occurred: {str(e)}")
-        else: # Forms are not valid
-            messages.error(request, "Please correct the errors shown below.")
+        
+        # This `else` block is now correctly indented
+        else:
+            messages.error(request, "Please correct the errors shown in the forms below.")
     
-    # For GET request or if POST had errors
+    # This `else` block for GET requests is now correctly indented
     else: 
         return_formset = SalesTransactionItemReturnFormSet(queryset=items_queryset)
-        payment_form = UpdatePaymentTypeForm(instance=sales_transaction)
+        delivery_form = ProcessDeliveryForm(instance=sales_transaction)
 
+    # This context and render call are now correctly indented
     context = {
         'return_formset': return_formset,
-        'payment_form': payment_form,
-        'transaction': sales_transaction
+        'delivery_form': delivery_form,
+        'transaction': sales_transaction,
     }
-    return render(request, 'stock/process_delivery_return.html', context)  
+    return render(request, 'stock/process_delivery_return.html', context)
 
 
 

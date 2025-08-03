@@ -373,6 +373,7 @@ class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
             'customer_shop', 
             'customer_name_manual',
             'payment_type', 
+            'amount_paid_cash', 'amount_paid_online', 'amount_on_credit',
             'needs_vehicle', 
             'assigned_vehicle',
             'notes',
@@ -399,6 +400,9 @@ class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
         customer_name_manual = cleaned_data.get('customer_name_manual')
         needs_vehicle = cleaned_data.get('needs_vehicle')
         assigned_vehicle = cleaned_data.get('assigned_vehicle')
+        cash = cleaned_data.get('amount_paid_cash') or Decimal('0.00')
+        online = cleaned_data.get('amount_paid_online') or Decimal('0.00')
+        credit = cleaned_data.get('amount_on_credit') or Decimal('0.00')
 
         if not customer_shop and not customer_name_manual:
             self.add_error('customer_shop', "Please select a shop or enter a customer name.")
@@ -470,25 +474,57 @@ SalesTransactionItemReturnFormSet = modelformset_factory(
     can_delete=False # We are not deleting items here, only updating return quantity
 )
 
-class UpdatePaymentTypeForm(forms.ModelForm):
+# class UpdatePaymentTypeForm(forms.ModelForm):
+#     """
+#     A simple form to update only the payment_type of a SalesTransaction.
+#     """
+#     class Meta:
+#         model = SalesTransaction
+#         fields = ['payment_type', 'total_discount_amount']
+#         widgets = {
+#             'payment_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
+#             'total_discount_amount': forms.NumberInput(attrs={
+#                 'class': 'input input-bordered w-full',
+#                 'step': '0.01'
+#             })
+#         }
+#         labels = {
+#             'payment_type': 'Confirm or Change Payment Type',
+#             'total_discount_amount': 'Update Discount Amount (Overall)'
+
+#         }
+class ProcessDeliveryForm(forms.ModelForm):
     """
-    A simple form to update only the payment_type of a SalesTransaction.
+    A form to finalize a delivery, allowing updates to split payments,
+    payment type, and the overall discount amount for the transaction.
     """
     class Meta:
         model = SalesTransaction
-        fields = ['payment_type', 'total_discount_amount']
+        fields = [
+            'payment_type',
+            'amount_paid_cash',
+            'amount_paid_online',
+            'amount_on_credit',
+            'total_discount_amount'
+        ]
         widgets = {
-            'payment_type': forms.Select(attrs={'class': 'select select-bordered w-full'}),
-            'total_discount_amount': forms.NumberInput(attrs={
-                'class': 'input input-bordered w-full',
-                'step': '0.01'
-            })
+            'payment_type': forms.Select(attrs={'class': 'select select-bordered w-full', 'id': 'delivery_payment_type'}),
+            'amount_paid_cash': forms.NumberInput(attrs={'class': 'input input-bordered w-full text-right', 'step': '0.01', 'id': 'delivery_amount_cash'}),
+            'amount_paid_online': forms.NumberInput(attrs={'class': 'input input-bordered w-full text-right', 'step': '0.01', 'id': 'delivery_amount_online'}),
+            'amount_on_credit': forms.NumberInput(attrs={'class': 'input input-bordered w-full text-right', 'step': '0.01', 'id': 'delivery_amount_credit'}),
+            'total_discount_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full text-right', 'step': '0.01', 'id': 'delivery_discount_amount'})
         }
         labels = {
-            'payment_type': 'Confirm or Change Payment Type',
-            'total_discount_amount': 'Update Discount Amount (Overall)'
-
+            'payment_type': 'Final Payment Method',
+            'amount_paid_cash': 'Amount Paid (Cash)',
+            'amount_paid_online': 'Amount Paid (Online)',
+            'amount_on_credit': 'Amount on Credit',
+            'total_discount_amount': 'Update/Finalize Discount'
         }
+
+    def clean_total_discount_amount(self):
+        return self.cleaned_data.get('total_discount_amount') or Decimal('0.00')
+
 
 
 class SaleForm(forms.Form): # Not a ModelForm because of dynamic/conditional fields

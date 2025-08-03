@@ -503,26 +503,42 @@ def generate_today_summary_view(request):
         total_revenue = sales_today.aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         total_profit = sum(sale.calculated_grand_profit for sale in sales_today) or Decimal('0.00')
         total_expense = expenses_today.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        online_sales_today = sales_today.filter(payment_type='ONLINE').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
         
-        # --- NEW CALCULATION: Total Debits for Today ---
-        # Get all debit amounts from both ledger models for today
-        debit_from_shops = shop_financial_entries_today.aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
-        debit_from_custom = custom_account_entries_today.aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
+        # --- REVISED PAYMENT CALCULATIONS TO HANDLE 'SPLIT' TYPE ---
+        # Total Cash from Sales:
+        # Sum the `amount_paid_cash` field across all of today's sales.
+        cash_from_sales = sales_today.aggregate(total=Sum('amount_paid_cash'))['total'] or Decimal('0.00')
         
-        total_debit_today = debit_from_shops + debit_from_custom
-        # Cash received calculation is unchanged
-        cash_from_shops = sum(entry.credit_amount for entry in shop_financial_entries_today if entry.transaction_type == 'CASH_RECEIPT')
-        cash_from_custom_accounts = custom_account_entries_today.aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        # Total Online Payments from Sales:
+        # Sum the `amount_paid_online` field across all of today's sales.
+        online_sales_today = sales_today.aggregate(total=Sum('amount_paid_online'))['total'] or Decimal('0.00')
+
+        # Total Credit Given in Sales:
+        # Sum the `amount_on_credit` field across all of today's sales.
+        # This is the amount that was added to various customer ledgers today from new sales.
+        credit_given_from_sales = sales_today.aggregate(total=Sum('amount_on_credit'))['total'] or Decimal('0.00')
         
-        total_cash_received = cash_from_shops + cash_from_custom_accounts
+        # --- REVISED DEBIT/CREDIT AND CASH RECEIVED CALCULATIONS ---
         
-        # --- FINAL NET CALCULATIONS (These formulas are already correct) ---
-        cash_from_cash_sales = sales_today.filter(payment_type='CASH').aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_physical_cash = ((cash_from_cash_sales + total_cash_received ) - total_expense) - debit_from_custom
+        # Cash Received from PAST Credit Sales (from shop/custom ledgers)
+        cash_received_from_shops_ledger = shop_financial_entries_today.filter(transaction_type='CASH_RECEIPT').aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        cash_received_from_custom_ledger = custom_account_entries_today.filter(credit_amount__gt=0).aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        total_cash_received_on_account = cash_received_from_shops_ledger + cash_received_from_custom_ledger
+
+        # Total Debit for Today (Credit given from new sales + Manual Debits)
+        # We already calculated the credit part from sales (`credit_given_from_sales`)
+        debit_from_custom_manual = custom_account_entries_today.filter(debit_amount__gt=0).aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
         
-        cash_from_direct_sales = sales_today.filter(payment_type__in=['CASH', 'ONLINE']).aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
-        net_total_settlement = ((cash_from_direct_sales + total_cash_received) - total_expense)- debit_from_custom
+        # Total debit is the new credit given out today plus any manual debits.
+        total_debit_today = credit_given_from_sales + debit_from_custom_manual
+
+        # --- REVISED FINAL NET CALCULATIONS ---
+        
+        # Net Physical Cash = (Cash from today's sales) + (Cash received for old debts) - (Today's cash expenses)
+        net_physical_cash = (cash_from_sales + total_cash_received_on_account) - total_expense
+
+        # Net Total Settlement = (All cash-like payments from today's sales) + (Cash received for old debts) - (Today's expenses)
+        net_total_settlement = (cash_from_sales + online_sales_today + total_cash_received_on_account) - total_expense
         
         # --- SAVE THE SUMMARY ---
         summary, created = DailySummary.objects.update_or_create(
@@ -534,7 +550,7 @@ def generate_today_summary_view(request):
                 'total_debit_today': total_debit_today,
                 'online_sales_today': online_sales_today,
                 'total_expense': total_expense,
-                'total_cash_received': total_cash_received,
+                'total_cash_received': total_cash_received_on_account,
                 'net_physical_cash': net_physical_cash,
                 'net_total_settlement': net_total_settlement,
             }
@@ -557,4 +573,77 @@ def delete_daily_summary_view(request, summary_pk):
         summary_date_str = summary.summary_date.strftime('%B %d, %Y')
         summary.delete()
         messages.error(request, f"Deleted the financial summary for {summary_date_str}.")
+    return redirect('accounts:daily_summary_list')
+
+
+@login_required
+@admin_mode_required
+def generate_specific_date_summary_view(request):
+    """
+    Generates or updates a financial summary for a SPECIFIC date provided in the request.
+    """
+    if request.method != 'POST':
+        # This view should only be accessed via POST
+        messages.warning(request, "Invalid request method.")
+        return redirect('accounts:daily_summary_list')
+
+    # Use the DateFilterForm to validate the incoming date
+    form = DateFilterForm(request.POST)
+    if form.is_valid():
+        target_date = form.cleaned_data.get('date_filter')
+        
+        if not target_date:
+            messages.error(request, "No date was selected to generate the summary for.")
+            return redirect('accounts:daily_summary_list')
+            
+        # --- All the calculation logic is identical to generate_today_summary_view, ---
+        # --- but it uses 'target_date' instead of 'today'. ---
+        
+        sales_for_day = SalesTransaction.objects.filter(user=request.user, transaction_time__date=target_date)
+        # ... (and so on for expenses, shop_financial_entries, custom_account_entries) ...
+        expenses_for_day = Expense.objects.filter(user=request.user, expense_date__date=target_date)
+        shop_financial_entries_for_day = ShopFinancialTransaction.objects.filter(user=request.user, transaction_date__date=target_date)
+        custom_account_entries_for_day = CustomAccountTransaction.objects.filter(user=request.user, transaction_date__date=target_date, store_in_daily_summery=True)
+
+        total_revenue = sales_for_day.aggregate(total=Sum('grand_total_revenue'))['total'] or Decimal('0.00')
+        total_profit = sum(sale.calculated_grand_profit for sale in sales_for_day)
+        total_expense = expenses_for_day.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        cash_from_sales = sales_for_day.aggregate(total=Sum('amount_paid_cash'))['total'] or Decimal('0.00')
+        online_sales_today = sales_for_day.aggregate(total=Sum('amount_paid_online'))['total'] or Decimal('0.00')
+        credit_given_from_sales = sales_for_day.aggregate(total=Sum('amount_on_credit'))['total'] or Decimal('0.00')
+        
+        cash_received_from_shops_ledger = shop_financial_entries_for_day.filter(transaction_type='CASH_RECEIPT').aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        cash_received_from_custom_ledger = custom_account_entries_for_day.filter(credit_amount__gt=0).aggregate(total=Sum('credit_amount'))['total'] or Decimal('0.00')
+        total_cash_received_on_account = cash_received_from_shops_ledger + cash_received_from_custom_ledger
+        
+        debit_from_custom_manual = custom_account_entries_for_day.filter(debit_amount__gt=0).aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
+        total_debit_today = credit_given_from_sales + debit_from_custom_manual
+
+        net_physical_cash = (cash_from_sales + total_cash_received_on_account) - total_expense
+        net_total_settlement = (cash_from_sales + online_sales_today + total_cash_received_on_account) - total_expense
+        
+        # --- Save the summary for the TARGET_DATE ---
+        summary, created = DailySummary.objects.update_or_create(
+            user=request.user,
+            summary_date=target_date,
+            defaults={
+                'total_revenue': total_revenue,
+                'total_profit': total_profit,
+                'total_debit_today': total_debit_today,
+                'online_sales_today': online_sales_today,
+                'total_expense': total_expense,
+                'total_cash_received': total_cash_received_on_account,
+                'net_physical_cash': net_physical_cash,
+                'net_total_settlement': net_total_settlement,
+            }
+        )
+        
+        if created:
+            messages.success(request, f"Successfully generated financial summary for {target_date.strftime('%B %d, %Y')}.")
+        else:
+            messages.success(request, f"Successfully updated financial summary for {target_date.strftime('%B %d, %Y')}.")
+    else:
+        messages.error(request, "Invalid date provided.")
+        
     return redirect('accounts:daily_summary_list')

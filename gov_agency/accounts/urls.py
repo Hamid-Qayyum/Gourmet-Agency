@@ -29,5 +29,5 @@ urlpatterns = [
     path('summary/', views.daily_summary_list_view, name='daily_summary_list'),
     path('summary/generate/', views.generate_today_summary_view, name='generate_today_summary'),
     path('summary/delete/<int:summary_pk>/', views.delete_daily_summary_view, name='delete_daily_summary'),
-
+    path('summary/generate-specific-date/', views.generate_specific_date_summary_view, name='generate_specific_date_summary'),
 ]
