@@ -198,7 +198,7 @@
                                 <span id="summary-grand-total" class="text-success">Rs {{ current_transaction_subtotal|floatformat:2|intcomma }}</span>
                             </div>
 
-                              <!-- <-------------------- START OF HIGHLIGHTED CHANGES -------------------->
+                              {% comment %} <!-- <-------------------- START OF HIGHLIGHTED CHANGES -------------------->
                             <div class="flex justify-between text-md pt-2">
                                 <span>Payments Entered:</span>
                                 <span id="summary-total-paid" class="font-semibold">Rs 0.00</span>
@@ -207,7 +207,7 @@
                                 <span>Remaining Due:</span>
                                 <span id="summary-remaining" class="font-semibold text-warning">Rs 0.00</span>
                             </div>
-                            <!-- <--------------------- END OF HIGHLIGHTED CHANGES --------------------->
+                            <!-- <--------------------- END OF HIGHLIGHTED CHANGES ---------------------> {% endcomment %}
 
                         </div>
                         {% if finalize_sale_form.non_field_errors %}<div role="alert" class="alert alert-error text-sm p-3 my-4"><div>{% for e in finalize_sale_form.non_field_errors %}{{e}}<br>{%endfor%}</div></div>{% endif %}
@@ -389,11 +389,9 @@ const cashInput = document.getElementById('id_amount_paid_cash');
 const onlineInput = document.getElementById('id_amount_paid_online');
 const creditInput = document.getElementById('id_amount_on_credit');
 
-const totalPaidEl = document.getElementById('summary-total-paid');
-const remainingEl = document.getElementById('summary-remaining');
 
 function updatePaymentSummary() {
-    if (!cashInput || !onlineInput || !creditInput || !totalPaidEl || !remainingEl || !grandTotalEl) return;
+    if (!cashInput || !onlineInput || !creditInput || !grandTotalEl) return;
 
     const cash = parseFloat(cashInput.value) || 0;
     const online = parseFloat(onlineInput.value) || 0;
@@ -401,20 +399,22 @@ function updatePaymentSummary() {
 
     const grandTotalText = grandTotalEl.textContent.replace(/[^0-9.-]+/g,"");
     const grandTotal = parseFloat(grandTotalText) || 0;
-
-    const totalPaid = cash + online + credit;
-    const remaining = grandTotal - totalPaid;
-
-    totalPaidEl.textContent = `Rs ${totalPaid.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    remainingEl.textContent = `Rs ${remaining.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-
-    remainingEl.classList.remove('text-warning', 'text-error', 'text-success');
-    if (Math.abs(remaining) < 0.01) {
-        remainingEl.classList.add('text-success');
-    } else if (remaining < 0) {
-        remainingEl.classList.add('text-error');
+    const totalPaid = cash + online + credit - discountInput.value;
+    const remaining = (grandTotal - totalPaid);
+    if (paymentTypeSelect.value === 'CASH') {
+        cashInput.value = grandTotal.toFixed(2);
+        onlineInput.value = '0.00';
+        creditInput.value = '0.00';
+    } else if (paymentTypeSelect.value === 'ONLINE') {
+        cashInput.value = '0.00';
+        onlineInput.value = grandTotal.toFixed(2);
+        creditInput.value = '0.00';
+    } else if (paymentTypeSelect.value === 'CREDIT') {
+        cashInput.value = '0.00';
+        onlineInput.value = '0.00';
+        creditInput.value = grandTotal.toFixed(2);
     } else {
-        remainingEl.classList.add('text-warning');
+        splitPaymentFieldsDiv.classList.add('hidden');
     }
 }
 

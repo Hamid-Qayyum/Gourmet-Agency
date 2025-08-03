@@ -129,12 +129,18 @@
                 <span style="color: green;">- Rs {{ transaction.total_discount_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
+            {%if transaction.get_payment_type_display == "Credit" or transaction.get_payment_type_display == "Split Payment"%}
+            <div>
+                <span>Credit:</span>
+                <span style="color: red;">- Rs {{transaction.amount_on_credit|floatformat:2}}</span>
+            </div>
+            {% endif %}
             {% endwith %}
             
             <hr class="dashed" style="margin: 5px 0;">
             <div class="grand-total">
                 <span>GRAND TOTAL:</span>
-                <span>Rs {{ transaction.grand_total_revenue|floatformat:2 }}</span>
+                <span>Rs {{ transaction.grand_total_after_credit|floatformat:2 }}</span>
             </div>
              <div>
                 <span>Payment Type:</span>

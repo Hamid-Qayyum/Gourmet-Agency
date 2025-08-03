@@ -246,7 +246,11 @@ class SalesTransaction(models.Model):
                 'total_discount_amount'
             ]
         )
-
+        
+    @property
+    def grand_total_after_credit(self):
+        return self.grand_total_revenue - self.amount_on_credit
+        
 
     @property
     def calculated_grand_profit(self):
