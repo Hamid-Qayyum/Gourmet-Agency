@@ -363,6 +363,12 @@ def sales_processing_view(request):
                             # For split payments, validate that the sum matches the grand total
                             if (cash + online + credit).quantize(Decimal('0.01')) != grand_total:
                                 raise forms.ValidationError(f"Split payments (Rs {cash + online + credit}) do not match Grand Total (Rs {grand_total}).")
+                            
+                            sales_transaction_header.notes = (
+                            f"Split Payment: Cash = Rs {cash:.2f}, "
+                            f"Online = Rs {online:.2f}, "
+                            f"Credit = Rs {credit:.2f}"
+                            )
                             # The amounts from the form are already correct on the instance
                         else:
                             # For single payments, we override the amount fields
