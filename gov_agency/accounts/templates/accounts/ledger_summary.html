@@ -28,9 +28,9 @@
             {% if associated_shops %}
                 <div id="shopsContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
                     {% for shop in associated_shops %}
-                    {% if shop.current_balance != 0 %}
+
                     <a href="{% url 'accounts:shop_ledger' shop_pk=shop.pk %}" 
-                       class="shop-item p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between"
+                       class="shop-item p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between  {% if shop.current_balance == 0 %}hidden zero-balance{% endif %}"
                        data-name="{{ shop.name|lower }}" 
                        data-address="{{ shop.location_address|lower }}">
                         <div>
@@ -44,7 +44,7 @@
                             </span>
                         </div>
                     </a>
-                    {% endif %}
+
                     {% endfor %}
                 </div>
                 <div id="noShopsMessage" class="hidden">
@@ -110,12 +110,22 @@
                 const name = item.getAttribute('data-name');
                 const address = item.getAttribute('data-address');
                 const matches = name.includes(searchTerm) || address.includes(searchTerm);
-                
+                const isZeroBalance = item.classList.contains('zero-balance');
                 if (matches) {
-                    item.style.display = 'block';
+                    item.classList.remove('hidden');
                     visibleShops++;
                 } else {
-                    item.style.display = 'none';
+                    item.classList.add('hidden');
+                }
+
+                 if (searchTerm === '') {
+                // When search is empty, re-hide shops with zero balance
+                if (isZeroBalance) {
+                    item.classList.add('hidden');
+                } else {
+                    item.classList.remove('hidden');
+                    visibleShops++;
+                    }
                 }
             });
     
@@ -133,10 +143,10 @@
                 const matches = name.includes(searchTerm);
                 
                 if (matches) {
-                    item.style.display = 'block';
+                    item.classList.remove('hidden');
                     visibleCustomers++;
                 } else {
-                    item.style.display = 'none';
+                    item.classList.add('hidden');
                 }
             });
     
