@@ -780,7 +780,7 @@ def pending_deliveries_view(request):
             # Use the ProductDetail's own helper method to convert the total item count back
             # into the 'MasterUnits.IndividualItems' decimal format.
             total_quantity_decimal = product_detail._get_decimal_from_items(total_items)
-            
+            print(total_quantity_decimal)
             loading_sheet_items.append({
                 'product': product_detail,
                 'total_quantity_decimal': total_quantity_decimal,
@@ -791,14 +791,25 @@ def pending_deliveries_view(request):
 
     # --- Total revenue per vehicle ---
     vehicle_total_revenue = defaultdict(lambda: Decimal('0.00'))
+    vehicle_total_credit = defaultdict(lambda: Decimal('0.00'))
+    vehicle_total_online = defaultdict(lambda: Decimal('0.00'))
+    vehicle_remaining_amount = defaultdict(lambda: Decimal('0.00'))
+
     for vehicle, group in groupby(pending_transactions, key=attrgetter('assigned_vehicle')):
-        total = sum(tx.grand_total_revenue for tx in group)
-        vehicle_total_revenue[vehicle.pk] = total
+        group = list(group)  # Convert groupby iterator to list to iterate multiple times
+        vehicle_total_revenue[vehicle.pk] = sum(tx.grand_total_revenue for tx in group)
+        vehicle_total_credit[vehicle.pk] = sum(tx.amount_on_credit or Decimal('0.00') for tx in group)
+        vehicle_total_online[vehicle.pk] = sum(tx.amount_paid_online or Decimal('0.00') for tx in group)
+        vehicle_remaining_amount[vehicle.pk] = (vehicle_total_revenue[vehicle.pk]- vehicle_total_credit[vehicle.pk]- vehicle_total_online[vehicle.pk])
 
     context = {
         'pending_transactions': pending_transactions,
         'loading_sheets': final_loading_sheets,
         'vehicle_total_revenue': vehicle_total_revenue,
+        'vehicle_total_credit': vehicle_total_credit,
+        'vehicle_total_online': vehicle_total_online,
+        'vehicle_remaining_amount': vehicle_remaining_amount,
+
     }
     return render(request, 'stock/pending_deliveries.html', context)
 

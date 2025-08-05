@@ -47,6 +47,17 @@
                                 <span class="font-semibold">Total Bill:</span>
                                 Rs {{ vehicle_total_revenue|dict_key:vehicle.pk|floatformat:2 }}
                             </p>
+                            <p class="text-sm text-base-content/80">
+                                <span class="font-semibold">Credit:</span>
+                                Rs {{ vehicle_total_credit|dict_key:vehicle.pk|floatformat:2 }}
+                            </p>
+                            <p class="text-sm text-base-content/80">
+                                <span class="font-semibold">Online:</span>
+                                Rs {{ vehicle_total_online|dict_key:vehicle.pk|floatformat:2 }}
+                            </p>
+                            <p class="text-sm text-base-content/80 ">
+                                Remaining / Cash to Collect: <span class="font-semibold">Rs {{ vehicle_remaining_amount|dict_key:vehicle.pk|floatformat:2 }}</span>
+                            </p>
                             <!-- This is the content that will be printed -->
                             <div id="sheet-{{ vehicle.pk }}" class="printable-section">
                                 <h3 class="text-lg font-bold mb-2 print:block hidden">Loading Sheet: {{ vehicle.vehicle_number }}</h3>
@@ -67,7 +78,7 @@
                                                         {{ item_data.product.quantity_in_packing|floatformat:"-1g" }} {{ item_data.product.unit_of_measure }}
                                                     </span>
                                                 </td>
-                                                <td class="text-right font-bold">{{ item_data.total_quantity_decimal  }}</td>
+                                                <td class="text-right font-bold">{{ item_data.total_quantity_decimal|floatformat:"2" }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
