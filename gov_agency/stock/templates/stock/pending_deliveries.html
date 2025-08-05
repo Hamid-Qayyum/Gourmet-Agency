@@ -28,10 +28,19 @@
                         <div class="card-body">
                             <div class="flex justify-between items-start">
                                 <h2 class="card-title">{{ vehicle.vehicle_number }}</h2>
+                                <div>
                                 <!-- Print button for THIS specific sheet -->
                                 <button class="btn btn-sm btn-outline non-printable hover:btn-success" onclick="printLoadingSheet('sheet-{{ vehicle.pk }}')">
                                     Print Sheet
                                 </button>
+                                <!-- Process All Button -->
+                                <button class="btn btn-sm btn-outline btn-error non-printable"
+                                        data-vehicle-id="{{ vehicle.pk }}"
+                                        data-vehicle-number="{{ vehicle.vehicle_number }}"
+                                        onclick="showProcessAllModal(this)">
+                                    Process All
+                                </button>
+                                </div>
                             </div>
                             <p class="text-sm text-base-content/70">{{ vehicle.driver_name|default:"No Driver" }}</p>
                             <p class="mt-2 text-sm text-base-content/80">
@@ -127,6 +136,21 @@
             <p class="text-center text-base-content/70 py-8">No transactions are currently pending delivery.</p>
         {% endif %}
     </div>
+
+
+             <dialog id="processAllModal" class="modal modal-bottom sm:modal-middle">
+                <div class="modal-box">
+                    <h3 class="font-bold text-lg">Confirm Processing</h3>
+                    <p class="py-2">Do you want to process all pending deliveries for <span id="vehicleNameModal" class="font-semibold"></span>?</p>
+                    <div class="modal-action">
+                    <form id="processAllForm" method="post" action="">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-error">Yes, Process All</button>
+                        <button type="button" class="btn" onclick="closeProcessAllModal()">Cancel</button>
+                    </form>
+                    </div>
+                </div>
+                </dialog>
 </div>
 {% endblock %}
 
@@ -175,5 +199,24 @@
             });
         }
     });
+
+    function showProcessAllModal(button) {
+        const vehicleId = button.getAttribute('data-vehicle-id');
+        const vehicleNumber = button.getAttribute('data-vehicle-number');
+
+        // Set the vehicle name in modal
+        document.getElementById('vehicleNameModal').textContent = vehicleNumber;
+
+        // Set form action dynamically
+        const form = document.getElementById('processAllForm');
+        form.action = `/stock/process-all/${vehicleId}/`;  // adjust this URL if needed
+
+        // Show modal (Tailwind DaisyUI-style)
+        document.getElementById('processAllModal').showModal();
+    }
+
+    function closeProcessAllModal() {
+        document.getElementById('processAllModal').close();
+    }
 </script>
 {% endblock %}

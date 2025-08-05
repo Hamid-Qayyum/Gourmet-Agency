@@ -30,6 +30,7 @@ urlpatterns = [
    path('update-note/', views.update_note, name='update_note'),
    path('sales/pending-deliveries/', views.pending_deliveries_view, name='pending_deliveries'),
    path('sales/process-delivery/<int:sale_pk>/', views.process_delivery_return_view, name='process_delivery_return'),
+   path('process-all/<int:vehicle_id>/', views.process_all_pending_for_vehicle, name='process_all_pending_for_vehicle'),
    path('reports/sales/', views.sales_report_view, name='sales_report'),
 
 

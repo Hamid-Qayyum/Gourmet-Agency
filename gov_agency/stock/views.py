@@ -33,8 +33,8 @@ from gov_agency.decorators import admin_mode_required
 from django import forms
 from itertools import groupby
 from operator import attrgetter
+from django.views.decorators.http import require_POST
 
-# Create your views here.
 
 # login view.........
 def user_login(request):
@@ -931,7 +931,70 @@ def process_delivery_return_view(request, sale_pk):
 
 
 
+@login_required
+@require_POST
+def process_all_pending_for_vehicle(request, vehicle_id):
+    vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
+    
+    # Fetch all pending deliveries for this vehicle assigned to this user
+    transactions = SalesTransaction.objects.filter(
+        assigned_vehicle=vehicle,
+        user=request.user,
+        status='PENDING_DELIVERY'
+    )
 
+    if not transactions.exists():
+        messages.warning(request, f"No pending deliveries found for vehicle {vehicle.vehicle_number}.")
+        return redirect('stock:pending_deliveries')
+
+    try:
+        with transaction.atomic():
+            for tx in transactions:
+                # --- Step 1: Finalize payment info (use existing values) ---
+                payment_type = tx.payment_type
+                grand_total = tx.grand_total_revenue
+
+                if payment_type == 'SPLIT':
+                    # Use the saved split values
+                    cash = tx.amount_paid_cash or Decimal('0.00')
+                    online = tx.amount_paid_online or Decimal('0.00')
+                    credit = tx.amount_on_credit or Decimal('0.00')
+                else:
+                    # Recalculate based on existing payment type
+                    cash = grand_total if payment_type == 'CASH' else Decimal('0.00')
+                    online = grand_total if payment_type == 'ONLINE' else Decimal('0.00')
+                    credit = grand_total if payment_type == 'CREDIT' else Decimal('0.00')
+
+                # --- Step 2: Mark the sale as completed ---
+                tx.status = 'COMPLETED'
+                tx.amount_paid_cash = cash
+                tx.amount_paid_online = online
+                tx.amount_on_credit = credit
+                tx.save()
+
+                # --- Step 3: Handle financial ledger credit entry ---
+                existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=tx).first()
+
+                if credit > 0 and tx.customer_shop:
+                    if existing_credit_entry:
+                        existing_credit_entry.debit_amount = credit
+                        existing_credit_entry.save()
+                    else:
+                        ShopFinancialTransaction.objects.create(
+                            shop=tx.customer_shop,
+                            user=request.user,
+                            source_sale=tx,
+                            transaction_type='CREDIT_SALE',
+                            debit_amount=credit
+                        )
+                elif existing_credit_entry:
+                    existing_credit_entry.delete()
+
+        messages.success(request, f"All pending deliveries for vehicle {vehicle.vehicle_number} have been successfully marked as completed.")
+    except Exception as e:
+        messages.error(request, f"A critical error occurred: {str(e)}")
+
+    return redirect('stock:pending_deliveries')
 
 
 @login_required
