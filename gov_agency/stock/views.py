@@ -31,7 +31,8 @@ from django.db.models.functions import TruncDate,TruncMonth
 from collections import defaultdict
 from gov_agency.decorators import admin_mode_required
 from django import forms
-
+from itertools import groupby
+from operator import attrgetter
 
 # Create your views here.
 
@@ -788,9 +789,16 @@ def pending_deliveries_view(request):
         # Sort items by product name for a clean printout
         final_loading_sheets[vehicle] = sorted(loading_sheet_items, key=lambda x: x['product'].product_base.name)
 
+    # --- Total revenue per vehicle ---
+    vehicle_total_revenue = defaultdict(lambda: Decimal('0.00'))
+    for vehicle, group in groupby(pending_transactions, key=attrgetter('assigned_vehicle')):
+        total = sum(tx.grand_total_revenue for tx in group)
+        vehicle_total_revenue[vehicle.pk] = total
+
     context = {
         'pending_transactions': pending_transactions,
         'loading_sheets': final_loading_sheets,
+        'vehicle_total_revenue': vehicle_total_revenue,
     }
     return render(request, 'stock/pending_deliveries.html', context)
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-
+{% load extra_tags %}
 {% block title %}Pending Deliveries{% endblock %}
 {% block page_title %}Pending Deliveries & Loading Sheets{% endblock %}
 
@@ -18,7 +18,7 @@
 
 {% block content %}
 <div class="p-4 md:p-6">
-    <!-- ======================= NEW SECTION: Loading Sheets ======================= -->
+    <!-- ======================= Loading Sheets ======================= -->
     <div class="mb-8">
         <h1 class="text-2xl font-bold mb-4">Vehicle Loading Sheets</h1>
         {% if loading_sheets %}
@@ -34,7 +34,10 @@
                                 </button>
                             </div>
                             <p class="text-sm text-base-content/70">{{ vehicle.driver_name|default:"No Driver" }}</p>
-
+                            <p class="mt-2 text-sm text-base-content/80">
+                                <span class="font-semibold">Total Bill:</span>
+                                Rs {{ vehicle_total_revenue|dict_key:vehicle.pk|floatformat:2 }}
+                            </p>
                             <!-- This is the content that will be printed -->
                             <div id="sheet-{{ vehicle.pk }}" class="printable-section">
                                 <h3 class="text-lg font-bold mb-2 print:block hidden">Loading Sheet: {{ vehicle.vehicle_number }}</h3>
