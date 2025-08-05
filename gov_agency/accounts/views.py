@@ -494,7 +494,7 @@ def generate_today_summary_view(request):
     if request.method == 'POST':
         today = timezone.localdate()
         # --- GATHER DATA (This part is unchanged) ---
-        sales_today = SalesTransaction.objects.filter(user=request.user, transaction_time__date=today)
+        sales_today = SalesTransaction.objects.filter(user=request.user, transaction_time__date=today).filter(~Q(status='PENDING_DELIVERY'))
         expenses_today = Expense.objects.filter(user=request.user, expense_date__date=today)
         shop_financial_entries_today = ShopFinancialTransaction.objects.filter(user=request.user, transaction_date__date=today)
         custom_account_entries_today = CustomAccountTransaction.objects.filter(user=request.user, transaction_date__date=today, store_in_daily_summery=True)
@@ -599,7 +599,7 @@ def generate_specific_date_summary_view(request):
         # --- All the calculation logic is identical to generate_today_summary_view, ---
         # --- but it uses 'target_date' instead of 'today'. ---
         
-        sales_for_day = SalesTransaction.objects.filter(user=request.user, transaction_time__date=target_date)
+        sales_for_day = SalesTransaction.objects.filter(user=request.user, transaction_time__date=target_date).filter(~Q(status='PENDING_DELIVERY'))
         # ... (and so on for expenses, shop_financial_entries, custom_account_entries) ...
         expenses_for_day = Expense.objects.filter(user=request.user, expense_date__date=target_date)
         shop_financial_entries_for_day = ShopFinancialTransaction.objects.filter(user=request.user, transaction_date__date=target_date)

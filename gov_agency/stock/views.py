@@ -754,7 +754,7 @@ def pending_deliveries_view(request):
         'customer_shop', 'assigned_vehicle'
     ).prefetch_related(
         'items__product_detail_snapshot__product_base'
-    ).order_by('assigned_vehicle__vehicle_number', 'transaction_time')
+    ).order_by('-transaction_time')
 
     # --- CORRECTED AGGREGATION LOGIC ---
     # Structure: {vehicle_obj: {product_detail_obj: total_individual_item_count}}
