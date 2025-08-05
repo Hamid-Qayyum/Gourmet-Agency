@@ -756,25 +756,37 @@ def pending_deliveries_view(request):
         'items__product_detail_snapshot__product_base'
     ).order_by('assigned_vehicle__vehicle_number', 'transaction_time')
 
-    # --- NEW AGGREGATION LOGIC ---
-    # We will build a dictionary to hold the loading sheet for each vehicle.
-    # The structure will be: {vehicle_object: {product_detail_object: total_quantity}}
-    vehicle_loading_sheets = defaultdict(lambda: defaultdict(Decimal))
+    # --- CORRECTED AGGREGATION LOGIC ---
+    # Structure: {vehicle_obj: {product_detail_obj: total_individual_item_count}}
+    vehicle_loading_sheets_agg = defaultdict(lambda: defaultdict(int))
 
     for tx in pending_transactions:
         vehicle = tx.assigned_vehicle
         for item in tx.items.all():
             product_detail = item.product_detail_snapshot
-            # Add the item's quantity to the running total for that product on that vehicle
-            vehicle_loading_sheets[vehicle][product_detail] += item.quantity_sold_decimal
-    
-    # Convert the nested defaultdict to a regular dict with a sorted list of items for the template
-    # The final structure will be: {vehicle_object: [ (product_detail, total_quantity), ... ]}
+            # Get the quantity sold as a count of individual items
+            individual_items_sold = item.dispatched_individual_items_count # Use the property
+            # Add this integer count to the running total for that product on that vehicle
+            vehicle_loading_sheets_agg[vehicle][product_detail] += individual_items_sold
+
+    # Convert the aggregated individual item counts back to the decimal format for display
+    # The final structure will be: {vehicle_object: [ {'product': product_detail, 'total_quantity_decimal': 2.05}, ... ]}
     final_loading_sheets = {}
-    for vehicle, product_quantities in vehicle_loading_sheets.items():
+    for vehicle, product_item_counts in vehicle_loading_sheets_agg.items():
+        
+        loading_sheet_items = []
+        for product_detail, total_items in product_item_counts.items():
+            # Use the ProductDetail's own helper method to convert the total item count back
+            # into the 'MasterUnits.IndividualItems' decimal format.
+            total_quantity_decimal = product_detail._get_decimal_from_items(total_items)
+            
+            loading_sheet_items.append({
+                'product': product_detail,
+                'total_quantity_decimal': total_quantity_decimal,
+            })
+
         # Sort items by product name for a clean printout
-        sorted_items = sorted(product_quantities.items(), key=lambda x: x[0].product_base.name)
-        final_loading_sheets[vehicle] = sorted_items
+        final_loading_sheets[vehicle] = sorted(loading_sheet_items, key=lambda x: x['product'].product_base.name)
 
     context = {
         'pending_transactions': pending_transactions,

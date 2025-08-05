@@ -23,7 +23,7 @@
         <h1 class="text-2xl font-bold mb-4">Vehicle Loading Sheets</h1>
         {% if loading_sheets %}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {% for vehicle, items in loading_sheets.items %}
+                {% for vehicle, items_list  in loading_sheets.items %}
                     <div class="card bg-base-100 shadow-xl border">
                         <div class="card-body">
                             <div class="flex justify-between items-start">
@@ -47,15 +47,15 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for product_detail, total_quantity in items %}
+                                             {% for item_data in items_list %}
                                             <tr>
                                                 <td class="text-sm">
-                                                    {{ product_detail.product_base.name }}
+                                                    {{ item_data.product.product_base.name }}
                                                     <span class="block text-xs">
-                                                        {{ product_detail.quantity_in_packing|floatformat:"-1g" }} {{ product_detail.unit_of_measure }}
+                                                        {{ item_data.product.quantity_in_packing|floatformat:"-1g" }} {{ item_data.product.unit_of_measure }}
                                                     </span>
                                                 </td>
-                                                <td class="text-right font-bold">{{ total_quantity }}</td>
+                                                <td class="text-right font-bold">{{ item_data.total_quantity_decimal  }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
