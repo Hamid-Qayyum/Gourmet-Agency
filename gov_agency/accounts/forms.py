@@ -19,18 +19,24 @@ class ReceiveCashForm(forms.ModelForm):
             'credit_amount': forms.NumberInput(attrs={
                 'class': 'input input-bordered w-full',
                 'step': '0.01',
-                'placeholder': 'Amount Received from Shop'
+                'placeholder': 'Amount Received (0.00)',
+                'id': 'receive_cash_credit_amount',
             }),
             'notes': forms.TextInput(attrs={
                 'class': 'input input-bordered w-full',
-                'placeholder': 'Optional notes (e.g., "Partial payment", "Invoice #123")'
+                'placeholder': 'Optional notes (e.g., "Partial payment", "Invoice #123")',
+                'id': 'receive_cash_notes',
             }),
         }
         labels = {
             'credit_amount': 'Cash Amount Received',
             'notes': 'Notes / Reference',
         }
-    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # This overrides the model's default=0.00 for the purpose of rendering the empty form.
+        self.fields['credit_amount'].initial = None
+
     def clean_credit_amount(self):
         """Ensure the received amount is a positive number."""
         amount = self.cleaned_data.get('credit_amount')

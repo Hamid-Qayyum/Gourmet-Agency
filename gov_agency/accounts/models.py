@@ -57,13 +57,13 @@ class ShopFinancialTransaction(models.Model):
     # A debit increases the amount the shop owes you.
     debit_amount = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('0.00'),
-        help_text="Amount the shop now owes you (e.g., from a credit sale). Increases balance."
+        help_text="Amount the shop now owes you (e.g., from a credit sale)."
     )
     
     # A credit decreases the amount the shop owes you.
     credit_amount = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal('0.00'),
-        help_text="Amount the shop paid you (e.g., cash received). Decreases balance."
+        help_text="Amount the shop paid you (e.g., cash received)."
     )
     
     notes = models.CharField(max_length=255, blank=True, null=True)

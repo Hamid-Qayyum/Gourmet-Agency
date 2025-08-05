@@ -4,6 +4,7 @@
 
 {% block title %}Ledger for {{ shop.name }}{% endblock %}
 {% block page_title %}Shop Ledger: {{ shop.name }}{% endblock %}
+
 {% block extra_head %}{{block.super}}
 <style>
     .table th, .table td { font-size: 0.875rem; padding: 0.5rem; vertical-align: middle; }
@@ -12,11 +13,32 @@
     .balance-col { text-align: right; font-weight: bold; }
 
     @media print {
-        body * { visibility: hidden; }
-        .printable-section, .printable-section * { visibility: visible; }
-        .printable-section { position: absolute; left: 0; top: 0; width: 100%; padding: 10mm; }
-        .non-printable { display: none !important; }
-        .table { font-size: 9.5pt; }
+        /* Hide everything in the body by default */
+        body * {
+            visibility: hidden;
+        }
+        /* Make only the elements with .printable-section and their children visible */
+        .printable-section, .printable-section * {
+            visibility: visible;
+        }
+        /* Position the main printable area to fill the page */
+        .main-printable-wrapper {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 10mm; /* Add padding for the print layout */
+        }
+        /* Explicitly hide elements marked as non-printable */
+        .non-printable {
+            display: none !important;
+        }
+        .table {
+            font-size: 9.5pt; /* Adjust font size for print */
+        }
+        @page {
+            margin: 10mm; /* Printer margins */
+        }
     }
 
 </style>
@@ -25,87 +47,85 @@
 {% block content %}
 <div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}>
 
-    <!-- This div will be the printable area -->
-    <div id="ledger-print-area" class="printable-section">
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
-            <div>
-                <h1 class="text-2xl font-bold">Financial Ledger: {{ shop.name }}</h1>
-                <p class="text-sm text-base-content/70">{{ shop.location_address|default:"" }} | {{ shop.contact_phone|default:"No phone" }}</p>
+    <!-- This new div wraps EVERYTHING you want to see on the printed page -->
+    <div class="main-printable-wrapper">
+        <div class="printable-section">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
+                <div>
+                    <h1 class="text-2xl font-bold">Financial Ledger: {{ shop.name }}</h1>
+                    <p class="text-sm text-base-content/70">{{ shop.location_address|default:"" }} | {{ shop.contact_phone|default:"No phone" }}</p>
+                </div>
+                <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0 non-printable">← Back to Hub</a>
             </div>
-            <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0 non-printable">← Back to Hub</a>
-        </div>
-
-        <!-- Summary Stats -->
-        <div class="stats shadow mb-6 w-full">
-            <div class="stat">
-                <div class="stat-title">Total Credit Given (Debits)</div>
-                <div class="stat-value text-error">Rs {{ shop.financial_transactions.all|sum_debit|floatformat:2|intcomma }}</div>
-            </div>
-            <div class="stat">
-                <div class="stat-title">Total Cash Received (Credits)</div>
-                <div class="stat-value text-success">Rs {{ shop.financial_transactions.all|sum_credit|floatformat:2|intcomma }}</div>
-            </div>
-            <div class="stat">
-                <div class="stat-title">Current Outstanding Balance</div>
-                <div class="stat-value text-primary">Rs {{ shop.current_balance|floatformat:2|intcomma }}</div>
-            </div>
-        </div>
-    </div>
     
-    <!-- Action Buttons (outside printable area) -->
-    <div class="mb-6 flex gap-2 non-printable">
-        <label for="receive_cash_modal_checkbox" class="btn btn-success">Receive Cash Payment</label>
-        <button onclick="window.print()" class="btn btn-outline">Print Ledger</button>
-    </div>
-
-    <!-- Ledger Table (inside printable area) -->
-    <div id="ledger-table-wrapper" class="overflow-x-auto bg-base-100 rounded-box shadow-lg printable-section">
-        <table class="table table-sm w-full">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Transaction Type</th>
-                    <th>Notes / Source</th>
-                    <th class="debit-col">Debit (Owed)</th>
-                    <th class="credit-col">Credit (Paid)</th>
-                    <th class="balance-col">Balance</th>
-                    <th class="text-center non-printable">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for entry in ledger_entries %}
-                <tr>
-                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
-                    <td><span class="badge badge-sm badge-ghost">{{ entry.get_transaction_type_display }}</span></td>
-                    <td class="text-xs">
-                        {% if entry.source_sale %}
-                            <a href="{% url 'stock:sale_receipt' sale_pk=entry.source_sale.pk %}" target="_blank" class="link link-hover text-primary">From Sale #{{ entry.source_sale.pk }}</a>
-                        {% else %}
-                            {{ entry.notes|default:""|truncatechars:40 }}
-                        {% endif %}
-                    </td>
-                    <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
-                    <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>
-                    <td class="balance-col">
-                        {# Running balance can be added here if calculated in the view #}
-                    </td>
-                    <td class="text-center space-x-1 non-printable">
-                        <button type="button" class="btn btn-xs btn-outline btn-info open-edit-tx-modal-btn" data-tx-pk="{{ entry.pk }}">
-                            Edit
-                        </button>
-                        {% if not entry.source_sale %}
-                            <button type="button" class="btn btn-xs btn-outline btn-error open-delete-tx-modal-btn" 
-                            data-tx-pk="{{ entry.pk }}" data-tx-info="{{entry.get_transaction_type_display}} of Rs {{entry.debit_amount|add:entry.credit_amount}}">
-                            Delete
-                        </button>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="7" class="text-center py-6">No financial transactions recorded for this shop yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <!-- Summary Stats -->
+            <div class="stats shadow mb-6 w-full">
+                <div class="stat non-printable">
+                    <div class="stat-title">Total Credit Given (Debits)</div>
+                    <div class="stat-value text-error">Rs {{ shop.financial_transactions.all|sum_debit|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="stat non-printable">
+                    <div class="stat-title">Total Cash Received (Credits)</div>
+                    <div class="stat-value text-success">Rs {{ shop.financial_transactions.all|sum_credit|floatformat:2|intcomma }}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Current Outstanding Balance</div>
+                    <div class="stat-value text-primary">Rs {{ shop.current_balance|floatformat:2|intcomma }}</div>
+                </div>
+            </div>
+        </div>
+    
+        <!-- Action Buttons (This stays in its original visual position on screen) -->
+        <div class="mb-6 flex gap-2 non-printable">
+            <label for="receive_cash_modal_checkbox" class="btn btn-success">Receive Cash Payment</label>
+            <button onclick="window.print()" class="btn btn-outline">Print Ledger</button>
+        </div>
+    
+        <!-- Ledger Table (This is the second part of the printable section) -->
+        <div class="overflow-x-auto bg-base-100 rounded-box shadow-lg printable-section">
+            <table class="table table-sm w-full">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Transaction Type</th>
+                        <th>Notes / Source</th>
+                        <th class="debit-col">Debit (Owed)</th>
+                        <th class="credit-col">Credit (Paid)</th>
+                        <th class="text-center non-printable">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in ledger_entries %}
+                    <tr>
+                        <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
+                        <td><span class="badge badge-sm badge-ghost">{{ entry.get_transaction_type_display }}</span></td>
+                        <td class="text-xs">
+                            {% if entry.source_sale %}
+                                <a href="{% url 'stock:sale_receipt' sale_pk=entry.source_sale.pk %}" target="_blank" class="link link-hover text-primary">From Sale #{{ entry.source_sale.pk }}</a>
+                            {% else %}
+                                {{ entry.notes|default:""|truncatechars:40 }}
+                            {% endif %}
+                        </td>
+                        <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
+                        <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>
+                        <td class="text-center space-x-1 non-printable">
+                            <button type="button" class="btn btn-xs btn-outline btn-info open-edit-tx-modal-btn" data-tx-pk="{{ entry.pk }}">
+                                Edit
+                            </button>
+                            {% if not entry.source_sale %}
+                                <button type="button" class="btn btn-xs btn-outline btn-error open-delete-tx-modal-btn" 
+                                data-tx-pk="{{ entry.pk }}" data-tx-info="{{entry.get_transaction_type_display}} of Rs {{entry.debit_amount|add:entry.credit_amount}}">
+                                Delete
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-6">No financial transactions recorded for this shop yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- MODALS for Receive Cash, Edit, and Delete -->
