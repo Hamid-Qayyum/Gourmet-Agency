@@ -34,7 +34,12 @@
                             <div class="form-control w-full md:col-span-2">{{ form_item.product_display.label_tag }}{{ form_item.product_display }}</div>
                             <div class="form-control w-full">{{ form_item.dispatched_quantity_display.label_tag }}{{ form_item.dispatched_quantity_display }}</div>
                             <div class="form-control w-full md:col-span-3">{{ form_item.returned_quantity_decimal.label_tag }}{{ form_item.returned_quantity_decimal }}{% if form_item.returned_quantity_decimal.errors %}<p class="text-error text-xs mt-1">{{ form_item.returned_quantity_decimal.errors|join:", " }}</p>{% endif %}</div>
-                        </div>
+                            <div class="form-control w-full md:col-span-3">
+                                <label for="{{ form_item.increased_demand.id_for_label }}" class="label">
+                                    <span class="label-text">Increased Demand</span>
+                                </label>{{ form_item.increased_demand }}
+                            </div>
+                            </div>
                     </div>
                 {% endfor %}
                 </div>
@@ -103,10 +108,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const price = initialItemData[index].price;
             const itemsPerMu = initialItemData[index].itemsPerMu;
             const returnInput = row.querySelector('input[name$="-returned_quantity_decimal"]');
+            const increasedInput = row.querySelector('input[name$="-increased_demand"]');
             const returnedQty = parseFloat(returnInput.value) || 0;
+            const increasedQty = parseFloat(increasedInput?.value) || 0;
             const dispatchedItems = getItemsFromDecimal(dispatchedQty, itemsPerMu);
             const returnedItems = getItemsFromDecimal(returnedQty, itemsPerMu);
-            const netSoldItems = Math.max(0, dispatchedItems - returnedItems);
+            const increasedItems = getItemsFromDecimal(increasedQty, itemsPerMu);
+            const netSoldItems = Math.max(0, dispatchedItems - returnedItems + increasedItems);
             grossSubtotalAfterReturns += netSoldItems * price;
         });
 
@@ -134,6 +142,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     returnInputs.forEach(input => input.addEventListener('input', calculateFinalAmount));
+    const increasedInputs = document.querySelectorAll('input[name$="-increased_demand"]');
+    increasedInputs.forEach(input => input.addEventListener('input', calculateFinalAmount));
     if (discountInput) discountInput.addEventListener('input', calculateFinalAmount);
     if (paymentTypeSelect) paymentTypeSelect.addEventListener('change', handleDeliveryPaymentTypeChange);
     

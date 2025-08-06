@@ -573,7 +573,7 @@ def confirm_reverse_sale(request, sale_id):
                     item.product_detail_snapshot.increase_stock(item.quantity_sold_decimal)
 
                 # 2. Delete Ledger Entry if it was CREDIT
-                if sale.payment_type == 'CREDIT':
+                if sale.payment_type == 'CREDIT' or sale.payment_type == 'SPLIT':
                     ShopFinancialTransaction.objects.filter(source_sale=sale).delete()
 
                 # 3. Delete Sale Items and Sale
@@ -740,6 +740,7 @@ def update_note(request):
 
 
 
+
 @login_required
 def pending_deliveries_view(request):
     """
@@ -780,7 +781,7 @@ def pending_deliveries_view(request):
             # Use the ProductDetail's own helper method to convert the total item count back
             # into the 'MasterUnits.IndividualItems' decimal format.
             total_quantity_decimal = product_detail._get_decimal_from_items(total_items)
-            print(total_quantity_decimal)
+            
             loading_sheet_items.append({
                 'product': product_detail,
                 'total_quantity_decimal': total_quantity_decimal,
@@ -789,7 +790,7 @@ def pending_deliveries_view(request):
         # Sort items by product name for a clean printout
         final_loading_sheets[vehicle] = sorted(loading_sheet_items, key=lambda x: x['product'].product_base.name)
 
-    # --- Total revenue per vehicle ---
+    # --- Total revenue credit and online and receiveable per vehicle ---
     vehicle_total_revenue = defaultdict(lambda: Decimal('0.00'))
     vehicle_total_credit = defaultdict(lambda: Decimal('0.00'))
     vehicle_total_online = defaultdict(lambda: Decimal('0.00'))
@@ -809,7 +810,6 @@ def pending_deliveries_view(request):
         'vehicle_total_credit': vehicle_total_credit,
         'vehicle_total_online': vehicle_total_online,
         'vehicle_remaining_amount': vehicle_remaining_amount,
-
     }
     return render(request, 'stock/pending_deliveries.html', context)
 
@@ -840,18 +840,31 @@ def process_delivery_return_view(request, sale_pk):
                     # --- Step 1: Process Item Returns and Update Stock ---
                     # Loop through each item form to calculate stock changes
                     for form_item in return_formset:
-                        if form_item.has_changed() and 'returned_quantity_decimal' in form_item.changed_data:
-                            item_instance = form_item.instance
+                        item_instance = form_item.instance
+                        product_detail = item_instance.product_detail_snapshot
+                        if form_item.has_changed() and 'returned_quantity_decimal' in form_item.changed_data:                           
                             original_returned = item_instance.returned_quantity_decimal
                             new_returned = form_item.cleaned_data['returned_quantity_decimal']
-                            stock_diff = new_returned - original_returned
-                            
-                            product_detail = item_instance.product_detail_snapshot
+                            stock_diff = new_returned - original_returned                         
                             if stock_diff > 0:
                                 product_detail.increase_stock(stock_diff)
                             elif stock_diff < 0:
                                 product_detail.decrease_stock(abs(stock_diff))
-                    
+
+                        # --- Handle increased demand ---
+                        increased_demand = form_item.cleaned_data.get('increased_demand') or Decimal('0.00')
+                        if increased_demand > 0:
+                            original_qty = item_instance.quantity_sold_decimal or Decimal('0.00')
+                            total_items = product_detail._get_items_from_decimal(original_qty) + product_detail._get_items_from_decimal(increased_demand)
+                            updated_qty = product_detail._get_decimal_from_items(total_items)
+
+                            # Update sale quantity
+                            item_instance.quantity_sold_decimal = updated_qty
+
+                            # Decrease stock to reflect additional sale
+                            product_detail.decrease_stock(increased_demand)
+                            item_instance.save()  # Save the updated sale item
+                      
                     # Save all item return changes at once
                     return_formset.save()
 
@@ -875,6 +888,11 @@ def process_delivery_return_view(request, sale_pk):
                         sales_transaction.amount_paid_cash = cash
                         sales_transaction.amount_paid_online = online
                         sales_transaction.amount_on_credit = credit
+                        sales_transaction.notes = (
+                            f"Split Payment: Cash = Rs {cash:.2f}, "
+                            f"Online = Rs {online:.2f}, "
+                            f"Credit = Rs {credit:.2f}"
+                            )
                     else: # Single payment type
                         sales_transaction.amount_paid_cash = final_grand_total if payment_type == 'CASH' else Decimal('0.00')
                         sales_transaction.amount_paid_online = final_grand_total if payment_type == 'ONLINE' else Decimal('0.00')

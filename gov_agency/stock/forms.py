@@ -438,7 +438,13 @@ class SalesTransactionItemReturnForm(forms.ModelForm):
         required=False,
         widget=forms.TextInput(attrs={'readonly': True, 'class': 'input input-sm input-bordered w-full bg-base-200'})
     )
-
+    increased_demand = forms.DecimalField(
+        required=False,
+        min_value=0,
+        decimal_places=2,
+        label="Increased Demand",
+        widget=forms.NumberInput(attrs={'step': '0.01', 'placeholder': 'Any Increased Demand (1.05)', 'class': 'input input-sm input-bordered w-full'})
+    )
     class Meta:
         model = SalesTransactionItem
         fields = ['returned_quantity_decimal'] # Only this field is editable
