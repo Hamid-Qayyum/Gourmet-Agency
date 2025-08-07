@@ -53,6 +53,9 @@
                 </label>
             </div>
         </form>
+            <div class="mt-4">
+                <input type="text" id="searchInput" placeholder="Search transactions..." class="input input-sm input-bordered md:max-w-xs">
+            </div>
     </div>
     <!-- END: Date Filter Form -->
 
@@ -78,7 +81,14 @@
                 </thead>
                 <tbody>
                     {% for tx in transactions %}
-                    <tr class="hover">
+                    <tr class="hover" data-search="
+                        {{ tx.pk }} 
+                        {{ tx.transaction_time|date:'d-m-Y' }}
+                        {{ tx.customer_shop.name|default:tx.customer_name_manual|default:'N/A' }}
+                        {{ tx.get_payment_type_display }}
+                        {{ tx.get_status_display }}
+                        {{ tx.assigned_vehicle.vehicle_number|default:'' }}
+                    ">
                         <td>{{ tx.pk }}</td>
                         <td class="text-xs whitespace-nowrap">{{ tx.transaction_time|date:"d-m-Y" }}</td>
                         <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A"|truncatechars:25 }}</td>
@@ -405,6 +415,21 @@ document.addEventListener('DOMContentLoaded', function () {
             }
           });
     });
+
+    document.getElementById('searchInput').addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const rows = document.querySelectorAll('table tbody tr');
+
+    rows.forEach(row => {
+        const data = row.getAttribute('data-search').toLowerCase();
+        if (data.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
 });
 </script>
 {% endblock %}
