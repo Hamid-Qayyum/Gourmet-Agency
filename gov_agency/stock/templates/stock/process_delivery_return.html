@@ -35,10 +35,16 @@
                             <div class="form-control w-full">{{ form_item.dispatched_quantity_display.label_tag }}{{ form_item.dispatched_quantity_display }}</div>
                             <div class="form-control w-full md:col-span-3">{{ form_item.returned_quantity_decimal.label_tag }}{{ form_item.returned_quantity_decimal }}{% if form_item.returned_quantity_decimal.errors %}<p class="text-error text-xs mt-1">{{ form_item.returned_quantity_decimal.errors|join:", " }}</p>{% endif %}</div>
                             <div class="form-control w-full md:col-span-3">
-                                <label for="{{ form_item.increased_demand.id_for_label }}" class="label">
-                                    <span class="label-text">Increased Demand</span>
-                                </label>{{ form_item.increased_demand }}
-                            </div>
+                            <label for="{{ form_item.increased_demand.id_for_label }}" class="label">
+                                <span class="label-text">Increased Demand</span>
+                            </label>
+                            {{ form_item.increased_demand }}
+                            {% if form_item.increased_demand.errors %}
+                                <p class="text-error text-xs mt-1">
+                                    {{ form_item.increased_demand.errors|join:", " }}
+                                </p>
+                            {% endif %}
+                        </div>
                             </div>
                     </div>
                 {% endfor %}
@@ -62,8 +68,9 @@
                 {% if delivery_form.non_field_errors %}<div class="alert alert-error text-sm mt-4"><span>{{ delivery_form.non_field_errors }}</span></div>{% endif %}
 
                 <div class="card-actions justify-end mt-8 space-x-3">
-                    <a href="{% url 'stock:pending_deliveries' %}" class="btn btn-ghost">Cancel</a>
-                    <button type="submit" class="btn btn-success">Confirm Delivery & Finalize</button>
+                    <a href="{% url 'stock:pending_deliveries' %}" class="btn btn-error">Cancel</a>
+                    <button type="submit" name="mark_as_done" value="1" class="btn btn-success">Mark as Done</button>
+                    <button type="submit" class="btn btn-warning">Confirm Delivery & Finalize</button>
                 </div>
             </form>
         </div>

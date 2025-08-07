@@ -535,10 +535,10 @@ def generate_today_summary_view(request):
         # --- REVISED FINAL NET CALCULATIONS ---
         
         # Net Physical Cash = (Cash from today's sales) + (Cash received for old debts) - (Today's cash expenses)
-        net_physical_cash = (cash_from_sales + total_cash_received_on_account) - total_expense
+        net_physical_cash = ((cash_from_sales + total_cash_received_on_account) - total_expense) - debit_from_custom_manual
 
         # Net Total Settlement = (All cash-like payments from today's sales) + (Cash received for old debts) - (Today's expenses)
-        net_total_settlement = (cash_from_sales + online_sales_today + total_cash_received_on_account) - total_expense
+        net_total_settlement = ((cash_from_sales + online_sales_today + total_cash_received_on_account) - total_expense) - debit_from_custom_manual
         
         # --- SAVE THE SUMMARY ---
         summary, created = DailySummary.objects.update_or_create(
@@ -620,8 +620,8 @@ def generate_specific_date_summary_view(request):
         debit_from_custom_manual = custom_account_entries_for_day.filter(debit_amount__gt=0).aggregate(total=Sum('debit_amount'))['total'] or Decimal('0.00')
         total_debit_today = credit_given_from_sales + debit_from_custom_manual
 
-        net_physical_cash = (cash_from_sales + total_cash_received_on_account) - total_expense
-        net_total_settlement = (cash_from_sales + online_sales_today + total_cash_received_on_account) - total_expense
+        net_physical_cash = ((cash_from_sales + total_cash_received_on_account) - total_expense) - debit_from_custom_manual
+        net_total_settlement = ((cash_from_sales + online_sales_today + total_cash_received_on_account) - total_expense) - debit_from_custom_manual
         
         # --- Save the summary for the TARGET_DATE ---
         summary, created = DailySummary.objects.update_or_create(

@@ -761,9 +761,10 @@ def pending_deliveries_view(request):
     # --- CORRECTED AGGREGATION LOGIC ---
     # Structure: {vehicle_obj: {product_detail_obj: total_individual_item_count}}
     vehicle_loading_sheets_agg = defaultdict(lambda: defaultdict(int))
-
+    no_of_invoices = defaultdict(lambda: int(0))  # To count invoices per vehicle
     for tx in pending_transactions:
         vehicle = tx.assigned_vehicle
+        no_of_invoices[vehicle.pk] += 1
         for item in tx.items.all():
             product_detail = item.product_detail_snapshot
             # Get the quantity sold as a count of individual items
@@ -792,6 +793,7 @@ def pending_deliveries_view(request):
 
     # --- Total revenue credit and online and receiveable per vehicle ---
     vehicle_total_revenue = defaultdict(lambda: Decimal('0.00'))
+    vehicle_total_discount = defaultdict(lambda: Decimal('0.00'))
     vehicle_total_credit = defaultdict(lambda: Decimal('0.00'))
     vehicle_total_online = defaultdict(lambda: Decimal('0.00'))
     vehicle_remaining_amount = defaultdict(lambda: Decimal('0.00'))
@@ -799,17 +801,19 @@ def pending_deliveries_view(request):
     for vehicle, group in groupby(pending_transactions, key=attrgetter('assigned_vehicle')):
         group = list(group)  # Convert groupby iterator to list to iterate multiple times
         vehicle_total_revenue[vehicle.pk] = sum(tx.grand_total_revenue for tx in group)
+        vehicle_total_discount[vehicle.pk] = sum(tx.total_discount_amount or Decimal('0.00') for tx in group)
         vehicle_total_credit[vehicle.pk] = sum(tx.amount_on_credit or Decimal('0.00') for tx in group)
         vehicle_total_online[vehicle.pk] = sum(tx.amount_paid_online or Decimal('0.00') for tx in group)
         vehicle_remaining_amount[vehicle.pk] = (vehicle_total_revenue[vehicle.pk]- vehicle_total_credit[vehicle.pk]- vehicle_total_online[vehicle.pk])
-
     context = {
         'pending_transactions': pending_transactions,
         'loading_sheets': final_loading_sheets,
         'vehicle_total_revenue': vehicle_total_revenue,
+        'vehicle_total_discount': vehicle_total_discount,
         'vehicle_total_credit': vehicle_total_credit,
         'vehicle_total_online': vehicle_total_online,
         'vehicle_remaining_amount': vehicle_remaining_amount,
+        'no_of_invoices': no_of_invoices,
     }
     return render(request, 'stock/pending_deliveries.html', context)
 
@@ -819,9 +823,6 @@ def pending_deliveries_view(request):
 
 @login_required
 def process_delivery_return_view(request, sale_pk):
-    """
-    Handles the processing of returns and final settlement for a sales transaction.
-    """
     sales_transaction = get_object_or_404(
         SalesTransaction, 
         pk=sale_pk, 
@@ -835,56 +836,101 @@ def process_delivery_return_view(request, sale_pk):
         delivery_form = ProcessDeliveryForm(request.POST, instance=sales_transaction)
 
         if return_formset.is_valid() and delivery_form.is_valid():
+            mark_as_done = 'mark_as_done' in request.POST
             try:
+                if mark_as_done:
+                    # Save updated return quantities and demand edits
+                    final_cost_of_tx = Decimal('0.00')
+                    for form_item in return_formset:
+                        item_instance = form_item.save(commit=False)
+                        product = item_instance.product_detail_snapshot
+                        returned_qty = form_item.cleaned_data.get('returned_quantity_decimal', Decimal('0.00'))
+                        increased_demand = form_item.cleaned_data.get('increased_demand') or Decimal('0.00')
+
+                        # Adjust quantity sold for increased demand
+                        if increased_demand > 0:
+                            item_instance.returned_quantity_decimal = returned_qty
+                            item_instance.increased_demand = increased_demand
+
+                        item_instance.returned_quantity_decimal = returned_qty
+                        item_instance.save()
+
+                        dispatched_items = product._get_items_from_decimal(item_instance.quantity_sold_decimal)
+                        returned_items = product._get_items_from_decimal(returned_qty)
+                        increased_items = product._get_items_from_decimal(increased_demand)
+
+                        net_items = dispatched_items + increased_items - returned_items
+                        final_cost_of_tx += net_items * item_instance.selling_price_per_item
+
+
+                    sales_transaction.total_discount_amount = delivery_form.cleaned_data['total_discount_amount']
+                    sales_transaction.payment_type = delivery_form.cleaned_data['payment_type']
+                    sales_transaction.amount_paid_cash = delivery_form.cleaned_data['amount_paid_cash']
+                    sales_transaction.amount_paid_online = delivery_form.cleaned_data['amount_paid_online']
+                    sales_transaction.amount_on_credit = delivery_form.cleaned_data['amount_on_credit']
+                    discount = sales_transaction.total_discount_amount or Decimal('0.00')
+                    expected_total = final_cost_of_tx - discount
+                    paid_total = (sales_transaction.amount_on_credit or Decimal('0.00')) + \
+                                (sales_transaction.amount_paid_online or Decimal('0.00')) + \
+                                (sales_transaction.amount_paid_cash or Decimal('0.00'))
+
+                    if paid_total > expected_total:
+                        raise forms.ValidationError("Total paid amount exceeds final total after discount.")
+                    elif paid_total < expected_total:
+                        raise forms.ValidationError("Total paid amount is less than final total after discount.")
+                    sales_transaction.grand_total_revenue = final_cost_of_tx - discount
+                    sales_transaction.is_ready_for_processing = True
+                    sales_transaction.status = 'PENDING_DELIVERY'
+                    sales_transaction.save()
+                    messages.success(request, "Marked as done. Will be processed with your changes.")
+                    
+                    return redirect('stock:pending_deliveries')
+                    # mark as done is completed and controll is returned ......
+
+                # Full processing
                 with transaction.atomic():
-                    # --- Step 1: Process Item Returns and Update Stock ---
-                    # Loop through each item form to calculate stock changes
                     for form_item in return_formset:
                         item_instance = form_item.instance
                         product_detail = item_instance.product_detail_snapshot
-                        if form_item.has_changed() and 'returned_quantity_decimal' in form_item.changed_data:                           
+
+                        # Process returned quantity change
+                        if form_item.has_changed() and 'returned_quantity_decimal' in form_item.changed_data:
                             original_returned = item_instance.returned_quantity_decimal
                             new_returned = form_item.cleaned_data['returned_quantity_decimal']
-                            stock_diff = new_returned - original_returned                         
+                            stock_diff = new_returned - original_returned
                             if stock_diff > 0:
                                 product_detail.increase_stock(stock_diff)
                             elif stock_diff < 0:
                                 product_detail.decrease_stock(abs(stock_diff))
 
-                        # --- Handle increased demand ---
+                        # Process increased demand
                         increased_demand = form_item.cleaned_data.get('increased_demand') or Decimal('0.00')
                         if increased_demand > 0:
                             original_qty = item_instance.quantity_sold_decimal or Decimal('0.00')
                             total_items = product_detail._get_items_from_decimal(original_qty) + product_detail._get_items_from_decimal(increased_demand)
                             updated_qty = product_detail._get_decimal_from_items(total_items)
-
-                            # Update sale quantity
                             item_instance.quantity_sold_decimal = updated_qty
-
-                            # Decrease stock to reflect additional sale
                             product_detail.decrease_stock(increased_demand)
-                            item_instance.save()  # Save the updated sale item
-                      
-                    # Save all item return changes at once
+                            item_instance.save()
+
                     return_formset.save()
 
-                    # --- Step 2: Recalculate Grand Totals ---
-                    # Important: Use the discount from the *validated form*, not the old instance
-                    new_discount_amount = delivery_form.cleaned_data.get('total_discount_amount') or Decimal('0.00')
-                    # Call update_grand_totals with the new discount amount
-                    sales_transaction.update_grand_totals(new_discount_amount=new_discount_amount)
+                    # Recalculate grand total
+                    new_discount = delivery_form.cleaned_data.get('total_discount_amount') or Decimal('0.00')
+                    sales_transaction.update_grand_totals(new_discount_amount=new_discount)
                     sales_transaction.refresh_from_db()
                     final_grand_total = sales_transaction.grand_total_revenue
 
-                    # --- Step 3: Process and Validate Final Payment Details ---
+                    # Payment processing
                     payment_type = delivery_form.cleaned_data['payment_type']
                     cash = delivery_form.cleaned_data.get('amount_paid_cash') or Decimal('0.00')
                     online = delivery_form.cleaned_data.get('amount_paid_online') or Decimal('0.00')
                     credit = delivery_form.cleaned_data.get('amount_on_credit') or Decimal('0.00')
 
                     if payment_type == 'SPLIT':
-                        if (cash + online + credit).quantize(Decimal('0.01')) != final_grand_total.quantize(Decimal('0.01')):
-                            raise forms.ValidationError(f"Split payments (Rs {cash + online + credit}) do not match the final Grand Total (Rs {final_grand_total}).")
+                        total_split = (cash + online + credit).quantize(Decimal('0.01'))
+                        if total_split != final_grand_total.quantize(Decimal('0.01')):
+                            raise forms.ValidationError(f"Split payments (Rs {total_split}) do not match Grand Total (Rs {final_grand_total}).")
                         sales_transaction.amount_paid_cash = cash
                         sales_transaction.amount_paid_online = online
                         sales_transaction.amount_on_credit = credit
@@ -892,18 +938,17 @@ def process_delivery_return_view(request, sale_pk):
                             f"Split Payment: Cash = Rs {cash:.2f}, "
                             f"Online = Rs {online:.2f}, "
                             f"Credit = Rs {credit:.2f}"
-                            )
-                    else: # Single payment type
+                        )
+                    else:
                         sales_transaction.amount_paid_cash = final_grand_total if payment_type == 'CASH' else Decimal('0.00')
                         sales_transaction.amount_paid_online = final_grand_total if payment_type == 'ONLINE' else Decimal('0.00')
                         sales_transaction.amount_on_credit = final_grand_total if payment_type == 'CREDIT' else Decimal('0.00')
-                    
+
                     sales_transaction.payment_type = payment_type
-                    
-                    # --- Step 4: Update Transaction Status ---
-                    final_items = sales_transaction.items.all()
-                    total_dispatched = sum(item.dispatched_individual_items_count for item in final_items)
-                    total_returned = sum(item.returned_individual_items_count for item in final_items)
+
+                    # Update status
+                    total_dispatched = sum(item.dispatched_individual_items_count for item in sales_transaction.items.all())
+                    total_returned = sum(item.returned_individual_items_count for item in sales_transaction.items.all())
 
                     if total_returned == 0:
                         sales_transaction.status = 'COMPLETED'
@@ -911,115 +956,132 @@ def process_delivery_return_view(request, sale_pk):
                         sales_transaction.status = 'FULLY_RETURNED'
                     else:
                         sales_transaction.status = 'PARTIALLY_RETURNED'
-                    
-                    # --- Step 5: Perform the FINAL save ---
+
                     sales_transaction.save()
 
-                    # --- Step 6: Update Financial Ledger Entry ---
-                    # (Your existing logic for ShopFinancialTransaction is correct)
-                    existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=sales_transaction).first()
+                    # Financial Ledger
+                    existing_credit = ShopFinancialTransaction.objects.filter(source_sale=sales_transaction).first()
                     if sales_transaction.amount_on_credit > 0 and sales_transaction.customer_shop:
-                        if existing_credit_entry:
-                            existing_credit_entry.debit_amount = sales_transaction.amount_on_credit
-                            existing_credit_entry.save()
+                        if existing_credit:
+                            existing_credit.debit_amount = sales_transaction.amount_on_credit
+                            existing_credit.save()
                         else:
                             ShopFinancialTransaction.objects.create(
                                 shop=sales_transaction.customer_shop, user=request.user,
                                 source_sale=sales_transaction, transaction_type='CREDIT_SALE',
                                 debit_amount=sales_transaction.amount_on_credit
                             )
-                    elif existing_credit_entry:
-                        existing_credit_entry.delete()
+                    elif existing_credit:
+                        existing_credit.delete()
 
                     messages.success(request, f"Delivery for Transaction #{sales_transaction.pk} processed successfully.")
                     return redirect('stock:pending_deliveries')
 
-            # This `except` block is now correctly indented
             except forms.ValidationError as e:
                 delivery_form.add_error(None, e)
                 messages.error(request, str(e.message))
             except Exception as e:
                 messages.error(request, f"A critical error occurred: {str(e)}")
-        
-        # This `else` block is now correctly indented
         else:
             messages.error(request, "Please correct the errors shown in the forms below.")
-    
-    # This `else` block for GET requests is now correctly indented
-    else: 
+    else:
         return_formset = SalesTransactionItemReturnFormSet(queryset=items_queryset)
         delivery_form = ProcessDeliveryForm(instance=sales_transaction)
 
-    # This context and render call are now correctly indented
-    context = {
+    return render(request, 'stock/process_delivery_return.html', {
         'return_formset': return_formset,
         'delivery_form': delivery_form,
         'transaction': sales_transaction,
-    }
-    return render(request, 'stock/process_delivery_return.html', context)
+    })
 
 
 
 @login_required
-@require_POST
+@transaction.atomic
 def process_all_pending_for_vehicle(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
-    
-    # Fetch all pending deliveries for this vehicle assigned to this user
+
     transactions = SalesTransaction.objects.filter(
         assigned_vehicle=vehicle,
         user=request.user,
         status='PENDING_DELIVERY'
-    )
+    ).prefetch_related('items__product_detail_snapshot', 'customer_shop')
 
     if not transactions.exists():
         messages.warning(request, f"No pending deliveries found for vehicle {vehicle.vehicle_number}.")
         return redirect('stock:pending_deliveries')
 
     try:
-        with transaction.atomic():
-            for tx in transactions:
-                # --- Step 1: Finalize payment info (use existing values) ---
-                payment_type = tx.payment_type
-                grand_total = tx.grand_total_revenue
+        for tx in transactions:
+            final_total = Decimal('0.00')
+            for item in tx.items.all():
+                product = item.product_detail_snapshot
+                selling_price = item.selling_price_per_item or Decimal('0.00')
 
-                if payment_type == 'SPLIT':
-                    # Use the saved split values
-                    cash = tx.amount_paid_cash or Decimal('0.00')
-                    online = tx.amount_paid_online or Decimal('0.00')
-                    credit = tx.amount_on_credit or Decimal('0.00')
+                dispatched_items = product._get_items_from_decimal(item.quantity_sold_decimal or Decimal('0.00'))
+                returned_items = product._get_items_from_decimal(item.returned_quantity_decimal or Decimal('0.00'))
+                increased_items = product._get_items_from_decimal(item.increased_demand or Decimal('0.00'))
+
+                # Apply stock changes
+                if returned_items > 0:
+                    product.increase_stock(product._get_decimal_from_items(returned_items))
+
+                if increased_items > 0:
+                    product.decrease_stock(product._get_decimal_from_items(increased_items))
+
+                # Update sold quantity (original + increased)
+                new_total_items = dispatched_items + increased_items
+                item.quantity_sold_decimal = product._get_decimal_from_items(new_total_items)
+                item.save()
+
+                net_items = new_total_items - returned_items
+                net_items = max(net_items, 0)
+                final_total += selling_price * net_items
+
+            # Apply discount
+            discount = tx.total_discount_amount or Decimal('0.00')
+            final_total -= discount
+
+            tx.grand_total_revenue = final_total
+
+            # Process payment fields
+            if tx.payment_type == 'SPLIT':
+                cash = tx.amount_paid_cash or Decimal('0.00')
+                online = tx.amount_paid_online or Decimal('0.00')
+                credit = tx.amount_on_credit or Decimal('0.00')
+                tx.notes = f"Split Payment: Cash = Rs {cash:.2f}, Online = Rs {online:.2f}, Credit = Rs {credit:.2f}"
+            else:
+                cash = final_total if tx.payment_type == 'CASH' else Decimal('0.00')
+                online = final_total if tx.payment_type == 'ONLINE' else Decimal('0.00')
+                credit = final_total if tx.payment_type == 'CREDIT' else Decimal('0.00')
+                tx.notes = ""
+
+            tx.amount_paid_cash = cash
+            tx.amount_paid_online = online
+            tx.amount_on_credit = credit
+            tx.status = 'COMPLETED'
+            tx.is_ready_for_processing = False  # Reset manual flag
+            tx.save()
+
+            # Update financial ledger
+            existing_ledger = ShopFinancialTransaction.objects.filter(source_sale=tx).first()
+            if credit > 0 and tx.customer_shop:
+                if existing_ledger:
+                    existing_ledger.debit_amount = credit
+                    existing_ledger.save()
                 else:
-                    # Recalculate based on existing payment type
-                    cash = grand_total if payment_type == 'CASH' else Decimal('0.00')
-                    online = grand_total if payment_type == 'ONLINE' else Decimal('0.00')
-                    credit = grand_total if payment_type == 'CREDIT' else Decimal('0.00')
+                    ShopFinancialTransaction.objects.create(
+                        shop=tx.customer_shop,
+                        user=request.user,
+                        source_sale=tx,
+                        transaction_type='CREDIT_SALE',
+                        debit_amount=credit
+                    )
+            elif existing_ledger:
+                existing_ledger.delete()
 
-                # --- Step 2: Mark the sale as completed ---
-                tx.status = 'COMPLETED'
-                tx.amount_paid_cash = cash
-                tx.amount_paid_online = online
-                tx.amount_on_credit = credit
-                tx.save()
+        messages.success(request, f"All pending deliveries for vehicle {vehicle.vehicle_number} processed successfully.")
 
-                # --- Step 3: Handle financial ledger credit entry ---
-                existing_credit_entry = ShopFinancialTransaction.objects.filter(source_sale=tx).first()
-
-                if credit > 0 and tx.customer_shop:
-                    if existing_credit_entry:
-                        existing_credit_entry.debit_amount = credit
-                        existing_credit_entry.save()
-                    else:
-                        ShopFinancialTransaction.objects.create(
-                            shop=tx.customer_shop,
-                            user=request.user,
-                            source_sale=tx,
-                            transaction_type='CREDIT_SALE',
-                            debit_amount=credit
-                        )
-                elif existing_credit_entry:
-                    existing_credit_entry.delete()
-
-        messages.success(request, f"All pending deliveries for vehicle {vehicle.vehicle_number} have been successfully marked as completed.")
     except Exception as e:
         messages.error(request, f"A critical error occurred: {str(e)}")
 

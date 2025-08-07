@@ -80,7 +80,7 @@
             <tbody>
                 {% for entry in ledger_entries %}
                 <tr>
-                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d (h:i:A)" }}</td>
+                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"d-m-Y (h:i:A)" }}</td>
                     <td class="text-xs">{{ entry.notes|default:""|truncatechars:50 }}</td>
                     <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
                     <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>

@@ -62,7 +62,7 @@
                 <thead>
                     <tr>
                         <th>Tx ID</th>
-                        <th>Date & Time</th>
+                        <th>Date</th>
                         <th>Customer</th>
                         <th>Products Sold</th>
                         <th>Returned</th>
@@ -80,7 +80,7 @@
                     {% for tx in transactions %}
                     <tr class="hover">
                         <td>{{ tx.pk }}</td>
-                        <td class="text-xs whitespace-nowrap">{{ tx.transaction_time|date:"Y-m-d" }}</td>
+                        <td class="text-xs whitespace-nowrap">{{ tx.transaction_time|date:"d-m-Y" }}</td>
                         <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A"|truncatechars:25 }}</td>
                         <td class="text-xs">
                             {% for item in tx.items.all|slice:":2" %}

@@ -213,7 +213,7 @@ class SalesTransaction(models.Model):
     # These will be calculated by summing up the totals from SalesTransactionItem records.
     grand_total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     grand_total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    
+    is_ready_for_processing = models.BooleanField(default=False)
     notes = models.TextField(blank=True, null=True, help_text="General notes for this entire transaction.")
 
     def __str__(self):
@@ -277,7 +277,12 @@ class SalesTransactionItem(models.Model):
     total_item_dispatched_revenue = models.DecimalField(max_digits=12, decimal_places=2)
     total_item_dispatched_cost = models.DecimalField(max_digits=12, decimal_places=2)
     returned_quantity_decimal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))])
-
+    increased_demand = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Additional demand beyond dispatched quantity."
+    )
     # --- HELPER METHODS AND PROPERTIES (These are all correct) ---
     def _get_individual_items_from_decimal(self, decimal_qty: Decimal, items_per_mu: int) -> int:
         if decimal_qty is None or items_per_mu is None or items_per_mu <= 0: return 0

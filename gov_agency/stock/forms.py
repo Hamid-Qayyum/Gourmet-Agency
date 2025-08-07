@@ -447,7 +447,7 @@ class SalesTransactionItemReturnForm(forms.ModelForm):
     )
     class Meta:
         model = SalesTransactionItem
-        fields = ['returned_quantity_decimal'] # Only this field is editable
+        fields = ['returned_quantity_decimal', 'increased_demand'] # Only this field is editable
         widgets = {
             'returned_quantity_decimal': forms.NumberInput(attrs={
                 'class': 'input input-sm input-bordered w-full',

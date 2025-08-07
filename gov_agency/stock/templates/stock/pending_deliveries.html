@@ -22,9 +22,9 @@
     <div class="mb-8">
         <h1 class="text-2xl font-bold mb-4">Vehicle Loading Sheets</h1>
         {% if loading_sheets %}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
                 {% for vehicle, items_list  in loading_sheets.items %}
-                    <div class="card bg-base-100 shadow-xl border">
+                    <div class="card bg-base-100 shadow-xl border self-start">
                         <div class="card-body">
                             <div class="flex justify-between items-start">
                                 <h2 class="card-title">{{ vehicle.vehicle_number }}</h2>
@@ -44,6 +44,10 @@
                             </div>
                             <p class="text-sm text-base-content/70">{{ vehicle.driver_name|default:"No Driver" }}</p>
                             <p class="mt-2 text-sm text-base-content/80">
+                                <span class="font-semibold">No Of Invoices:</span>
+                                {{ no_of_invoices|dict_key:vehicle.pk }}<br>
+                            </p>
+                            <p class="mt-2 text-sm text-base-content/80">
                                 <span class="font-semibold">Total Bill:</span>
                                 Rs {{ vehicle_total_revenue|dict_key:vehicle.pk|floatformat:2 }}
                             </p>
@@ -55,6 +59,10 @@
                                 <span class="font-semibold">Online:</span>
                                 Rs {{ vehicle_total_online|dict_key:vehicle.pk|floatformat:2 }}
                             </p>
+                            <p class="text-sm text-base-content/80">
+                            <span class="font-semibold">Total Discount:</span>
+                            Rs {{ vehicle_total_discount|dict_key:vehicle.pk|floatformat:2 }}
+                        </p>
                             <p class="text-sm text-base-content/80 ">
                                 Remaining / Cash to Collect: <span class="font-semibold">Rs {{ vehicle_remaining_amount|dict_key:vehicle.pk|floatformat:2 }}</span>
                             </p>
@@ -123,7 +131,7 @@
                         {% for tx in pending_transactions %}
                         <tr class="delivery-row">
                             <td>#{{ tx.pk }}</td>
-                            <td class="text-xs">{{ tx.transaction_time|date:"Y-m-d H:i" }}</td>
+                            <td class="text-xs">{{ tx.transaction_time|date:"d-m-Y H:i" }}</td>
                             <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A" }}</td>
                             <td class="text-xs">
                                 {% for item in tx.items.all|slice:":2" %}
@@ -137,6 +145,11 @@
                                     Process
                                 </a>
                             </td>
+                            <td>
+            {% if tx.is_ready_for_processing %}
+                <span class="badge badge-success text-xs ml-1">✓ Marked as Done</span>
+            {% endif %}
+        </td>
                         </tr>
                         {% endfor %}
                     </tbody>

@@ -97,7 +97,7 @@
                 <tbody>
                     {% for entry in ledger_entries %}
                     <tr>
-                        <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"Y-m-d H:i" }}</td>
+                        <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"d-m-Y H:i" }}</td>
                         <td><span class="badge badge-sm badge-ghost">{{ entry.get_transaction_type_display }}</span></td>
                         <td class="text-xs">
                             {% if entry.source_sale %}
