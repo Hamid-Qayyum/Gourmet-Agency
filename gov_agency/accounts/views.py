@@ -559,7 +559,7 @@ def generate_today_summary_view(request):
         if created:
             messages.success(request, f"Successfully generated financial summary for {today.strftime('%B %d, %Y')}.")
         else:
-            messages.success(request, f"Successfully updated financial summary for {today.strftime('%B %d, %Y')}.")
+            messages.info(request, f"Successfully updated financial summary for {today.strftime('%B %d, %Y')}.")
 
     return redirect('accounts:daily_summary_list')
 
@@ -642,7 +642,7 @@ def generate_specific_date_summary_view(request):
         if created:
             messages.success(request, f"Successfully generated financial summary for {target_date.strftime('%B %d, %Y')}.")
         else:
-            messages.success(request, f"Successfully updated financial summary for {target_date.strftime('%B %d, %Y')}.")
+            messages.info(request, f"Successfully updated financial summary for {target_date.strftime('%B %d, %Y')}.")
     else:
         messages.error(request, "Invalid date provided.")
         

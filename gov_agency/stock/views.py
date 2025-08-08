@@ -304,7 +304,7 @@ def sales_processing_view(request):
                     
                     current_items.append({
                         'product_detail_id': product_detail_batch.id,
-                        'product_display_name': f"{product_detail_batch.product_base.name} (Exp: {product_detail_batch.expirey_date.strftime('%d-%b-%Y')})",
+                        'product_display_name': f"{product_detail_batch.product_base.name} {product_detail_batch.quantity_in_packing} {product_detail_batch.unit_of_measure} (Exp: {product_detail_batch.expirey_date.strftime('%d-%b-%Y')})",
                         'quantity_decimal': str(quantity_to_add),
                         'selling_price_per_item': str(selling_price_item),
                         'cost_price_per_item': str(product_detail_batch.price_per_item),
