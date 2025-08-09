@@ -14,7 +14,7 @@ from django.contrib import messages
 from django.db.models  import Q,ProtectedError
 from django.db import transaction,IntegrityError# For atomic operations
 from django.http import JsonResponse
-from decimal import Decimal
+from decimal import Decimal ,ROUND_HALF_UP
 from django.db.models import Sum,Count,F, ExpressionWrapper, fields, DecimalField
 from django.utils import timezone
 from datetime import timedelta, date
@@ -1545,11 +1545,6 @@ def performance_summary_hub_view(request):
 
 @login_required
 def group_performance_summary_view(request, vehicle_pk=None):
-    """
-    DEFINITIVE VERSION 3: This view calculates figures dynamically. It correctly
-    aggregates quantities in Python and formats the output to match the
-    existing template's expectations without requiring HTML changes.
-    """
     user = request.user
     
     if vehicle_pk:
@@ -1578,11 +1573,28 @@ def group_performance_summary_view(request, vehicle_pk=None):
     daily_summary = []
     for day in days_with_sales:
         items_on_day = base_items_query.filter(transaction__transaction_time__date=day)
-        
-        # Calculate net revenue in Python for accuracy
-        net_revenue_on_day = sum(item.gross_line_subtotal for item in items_on_day)
+        net_revenue_on_day = Decimal('0.00')
+        seen_transactions_daily = set()
+        credit_total = Decimal('0.00')
+        online_total = Decimal('0.00')
+        for item in items_on_day:
+            transaction = item.transaction
+            total_discount = transaction.total_discount_amount or 0
+            gross_total = sum(i.gross_line_subtotal for i in transaction.items.all())
+            if gross_total != 0:
+                item_discount = ((item.gross_line_subtotal / gross_total) * total_discount).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
+            else:
+                item_discount = Decimal('0.00')
+            if transaction.pk not in seen_transactions_daily:
+                seen_transactions_daily.add(transaction.pk)
+                credit_total  += transaction.amount_on_credit or Decimal('0.00')
+                online_total += transaction.amount_paid_online or Decimal('0.00')
+            
+            # Calculate net revenue in Python for accuracy
+            net_revenue_on_day += item.gross_line_subtotal - item_discount
 
-        # --- PYTHON-BASED NET QUANTITY CALCULATION (THE FIX) ---
+        
+        # --- PYTHON-BASED NET QUANTITY CALCULATION ---
         # 1. Group items by their packaging and sum their individual item counts.
         quantity_agg = defaultdict(int)
         # Store a reference object for each group to access its properties later
@@ -1615,10 +1627,12 @@ def group_performance_summary_view(request, vehicle_pk=None):
         daily_summary.append({
             'day': day,
             'total_revenue': net_revenue_on_day,
-            'quantity_breakdown': sorted(quantity_breakdown, key=lambda x: x['net_quantity'], reverse=True)
+            'quantity_breakdown': sorted(quantity_breakdown, key=lambda x: x['net_quantity'], reverse=True),
+            'credit_total': credit_total,
+            'online_total': online_total,
         })
 
-    # --- Monthly Summary Calculation (with the same correct logic) ---
+    # --- Monthly Summary Calculation ---
     months_with_sales = base_items_query.annotate(
         month=TruncMonth('transaction__transaction_time')
     ).values_list('month', flat=True).distinct().order_by('-month')
@@ -1629,10 +1643,29 @@ def group_performance_summary_view(request, vehicle_pk=None):
             transaction__transaction_time__year=month.year,
             transaction__transaction_time__month=month.month
         )
-        
-        net_revenue_in_month = sum(item.gross_line_subtotal for item in items_in_month)
-        
-        # --- REPEAT THE SAME PYTHON-BASED NET QUANTITY CALCULATION ---
+        net_revenue_in_month = Decimal('0.00')
+        monthly_credit_total = Decimal('0.00')
+        monthly_online_total = Decimal('0.00')
+        seen_transactions  = set()  # To track unique transactions in the month
+        for item in items_in_month:
+            transaction = item.transaction
+            total_discount = transaction.total_discount_amount or Decimal('0.00')
+            total_gross = sum(i.gross_line_subtotal for i in transaction.items.all())
+
+            if total_gross != 0:
+                item_discount = ((item.gross_line_subtotal / total_gross) * total_discount).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
+            else:
+                item_discount = Decimal('0.00')
+
+            net_revenue_in_month += item.gross_line_subtotal - item_discount
+            # print(item, transaction.amount_on_credit, transaction.amount_paid_online, item.pk)
+            if transaction.pk not in seen_transactions:
+                seen_transactions.add(transaction.pk)
+                monthly_credit_total += item.transaction.amount_on_credit or Decimal('0.00')
+                print("Credit Total:", monthly_credit_total, "Item:", item)
+                monthly_online_total += item.transaction.amount_paid_online or Decimal('0.00')
+             
+        # ---SAME PYTHON-BASED NET QUANTITY CALCULATION ---
         quantity_agg = defaultdict(int)
         ref_objects = {}
         for item in items_in_month:
@@ -1656,7 +1689,9 @@ def group_performance_summary_view(request, vehicle_pk=None):
         monthly_summary.append({
             'month': month,
             'total_revenue': net_revenue_in_month,
-            'quantity_breakdown': sorted(quantity_breakdown, key=lambda x: x['net_quantity'], reverse=True)
+            'quantity_breakdown': sorted(quantity_breakdown, key=lambda x: x['net_quantity'], reverse=True),
+            'monthly_credit_total': monthly_credit_total,
+            'monthly_online_total': monthly_online_total,
         })
 
     context = {

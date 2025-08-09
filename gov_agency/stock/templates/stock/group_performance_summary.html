@@ -38,7 +38,14 @@
                                             {% endfor %}
                                         </ul>
                                     </td>
-                                    <td class="text-right font-semibold align-top pt-2">Rs {{ entry.total_revenue|floatformat:2|intcomma }}</td>
+                                    <td class="text-right font-semibold align-top pt-2">Totsl Sales: Rs {{ entry.total_revenue|floatformat:2|intcomma }}
+                                        {% if entry.credit_total %}
+                                            <div class="text-xs text-base-content/70 mt-1">Credit: Rs {{ entry.credit_total|floatformat:2|intcomma }}</div>
+                                        {% endif %}
+                                        {% if entry.online_total %}
+                                            <div class="text-xs text-base-content/70 mt-1">Online: Rs {{ entry.online_total|floatformat:2|intcomma }}</div>
+                                        {% endif %}
+                                    </td> 
                                 </tr>
                             {% empty %}
                                 <tr>
@@ -78,7 +85,14 @@
                                             {% endfor %}
                                         </ul>
                                     </td>
-                                    <td class="text-right font-semibold align-top pt-2">Rs {{ entry.total_revenue|floatformat:2|intcomma }}</td>
+                                    <td class="text-right font-semibold align-top pt-2">Total Sales: Rs {{ entry.total_revenue|floatformat:2|intcomma }}
+                                    {% if entry.monthly_credit_total %}
+                                    <div class="text-xs text-base-content/70 mt-1">Credit: Rs {{ entry.monthly_credit_total|floatformat:2|intcomma }}</div>
+                                    {% endif %}
+                                    {% if entry.monthly_online_total %}
+                                    <div class="text-xs text-base-content/70 mt-1">Online: Rs {{ entry.monthly_online_total|floatformat:2|intcomma }}</div>
+                                    {% endif %}
+                                    </td>
                                 </tr>
                             {% empty %}
                                 <tr>
