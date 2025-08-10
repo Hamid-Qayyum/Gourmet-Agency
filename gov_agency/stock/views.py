@@ -760,7 +760,7 @@ def pending_deliveries_view(request):
 
     # --- CORRECTED AGGREGATION LOGIC ---
     # Structure: {vehicle_obj: {product_detail_obj: total_individual_item_count}}
-    vehicle_loading_sheets_agg = defaultdict(lambda: defaultdict(int))
+    vehicle_loading_sheets_agg = defaultdict(lambda: defaultdict(lambda: {'total_items': 0, 'returned_items': 0, 'increased_demand_items': 0}))
     no_of_invoices = defaultdict(lambda: int(0))  # To count invoices per vehicle
     for tx in pending_transactions:
         vehicle = tx.assigned_vehicle
@@ -769,8 +769,12 @@ def pending_deliveries_view(request):
             product_detail = item.product_detail_snapshot
             # Get the quantity sold as a count of individual items
             individual_items_sold = item.dispatched_individual_items_count # Use the property
+            returned_items = product_detail._get_items_from_decimal(item.returned_quantity_decimal or Decimal('0.00'))
+            increased_demand = product_detail._get_items_from_decimal(item.increased_demand or Decimal('0.00'))
             # Add this integer count to the running total for that product on that vehicle
-            vehicle_loading_sheets_agg[vehicle][product_detail] += individual_items_sold
+            vehicle_loading_sheets_agg[vehicle][product_detail]['total_items'] += individual_items_sold
+            vehicle_loading_sheets_agg[vehicle][product_detail]['returned_items'] += returned_items
+            vehicle_loading_sheets_agg[vehicle][product_detail]['increased_demand_items'] += increased_demand
 
     # Convert the aggregated individual item counts back to the decimal format for display
     # The final structure will be: {vehicle_object: [ {'product': product_detail, 'total_quantity_decimal': 2.05}, ... ]}
@@ -778,14 +782,14 @@ def pending_deliveries_view(request):
     for vehicle, product_item_counts in vehicle_loading_sheets_agg.items():
         
         loading_sheet_items = []
-        for product_detail, total_items in product_item_counts.items():
+        for product_detail, counts in product_item_counts.items():
             # Use the ProductDetail's own helper method to convert the total item count back
-            # into the 'MasterUnits.IndividualItems' decimal format.
-            total_quantity_decimal = product_detail._get_decimal_from_items(total_items)
-            
+            # into the 'MasterUnits.IndividualItems' decimal format. 
             loading_sheet_items.append({
                 'product': product_detail,
-                'total_quantity_decimal': total_quantity_decimal,
+                'total_quantity_decimal': product_detail._get_decimal_from_items(counts['total_items']),
+                'returned_quantity_decimal': product_detail._get_decimal_from_items(counts['returned_items']),
+                'increased_demand_decimal': product_detail._get_decimal_from_items(counts['increased_demand_items']),
             })
 
         # Sort items by product name for a clean printout
@@ -800,10 +804,10 @@ def pending_deliveries_view(request):
 
     for vehicle, group in groupby(pending_transactions, key=attrgetter('assigned_vehicle')):
         group = list(group)  # Convert groupby iterator to list to iterate multiple times
-        vehicle_total_revenue[vehicle.pk] = sum(tx.grand_total_revenue for tx in group)
-        vehicle_total_discount[vehicle.pk] = sum(tx.total_discount_amount or Decimal('0.00') for tx in group)
-        vehicle_total_credit[vehicle.pk] = sum(tx.amount_on_credit or Decimal('0.00') for tx in group)
-        vehicle_total_online[vehicle.pk] = sum(tx.amount_paid_online or Decimal('0.00') for tx in group)
+        vehicle_total_revenue[vehicle.pk] += sum(tx.grand_total_revenue for tx in group)
+        vehicle_total_discount[vehicle.pk] += sum(tx.total_discount_amount or Decimal('0.00') for tx in group)
+        vehicle_total_credit[vehicle.pk] += sum(tx.amount_on_credit or Decimal('0.00') for tx in group)
+        vehicle_total_online[vehicle.pk] += sum(tx.amount_paid_online or Decimal('0.00') for tx in group)
         vehicle_remaining_amount[vehicle.pk] = (vehicle_total_revenue[vehicle.pk]- vehicle_total_credit[vehicle.pk]- vehicle_total_online[vehicle.pk])
     context = {
         'pending_transactions': pending_transactions,

@@ -11,7 +11,7 @@
         header, footer { text-align: center; margin-bottom: 10px; }
         header h1 { margin: 0 0 5px 0; font-size: 1.4em; }
         header p, footer p { margin: 1px 0; font-size: 0.85em; }
-        .info-section div { margin-bottom: 2px; font-size: 0.9em;}
+        .info-section div { margin-bottom: 6px; font-size: 0.9em;}
         .item-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.9em; }
         .item-table th, .item-table td { border-bottom: 1px dashed #eee; padding: 5px 2px; text-align: left; vertical-align: top; }
         .item-table th.qty, .item-table td.qty { text-align: center; width: 15%; }
@@ -37,7 +37,7 @@
                 margin: 0;
                 padding: 0;
                 background-color: #fff;
-                font-size: 9.5pt; /* Adjusting font size for print is usually necessary */
+                font-size: 13pt; /* Adjusting font size for print is usually necessary */
             }
             
             /* Hide everything except the receipt when printing */
@@ -74,7 +74,7 @@
 
         <div class="info-section">
             <div><strong>Transaction #:</strong> {{ transaction.pk }}</div>
-            <div><strong>Date:</strong> {{ transaction.transaction_time|date:"Y-m-d H:i:s" }}</div>
+            <div><strong>Date:</strong> {{ transaction.transaction_time|date:"d-m-Y H:i" }}</div>
             <div><strong>Cashier:</strong> {{ transaction.assigned_vehicle.driver_name|default:"Store" }}</div>
             <div>
                 <strong>Customer:</strong> 

@@ -10,8 +10,19 @@
     @media print {
         body * { visibility: hidden; }
         .printable-section, .printable-section * { visibility: visible; }
-        .printable-section { position: absolute; left: 0; top: 0; width: 100%; }
+        .printable-section { position: fixed; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
         .non-printable { display: none; }
+
+        /* remove overflow hiding for print */
+        .printable-section .overflow-x-auto {
+            overflow: visible !important;
+        }
+
+        /* Make table full width when printing */
+        .printable-section table {
+            width: 100% !important;
+            table-layout: auto !important;
+        }
     }
 </style>
 {% endblock %}
@@ -22,9 +33,9 @@
     <div class="mb-8">
         <h1 class="text-2xl font-bold mb-4">Vehicle Loading Sheets</h1>
         {% if loading_sheets %}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
+            <div class="flex flex-wrap items-start gap-4">
                 {% for vehicle, items_list  in loading_sheets.items %}
-                    <div class="card bg-base-100 shadow-xl border self-start">
+                    <div class="card bg-base-100 shadow-xl border self-start p-4 w-auto max-w-full">
                         <div class="card-body">
                             <div class="flex justify-between items-start">
                                 <h2 class="card-title">{{ vehicle.vehicle_number }}</h2>
@@ -70,11 +81,13 @@
                             <div id="sheet-{{ vehicle.pk }}" class="printable-section">
                                 <h3 class="text-lg font-bold mb-2 print:block hidden">Loading Sheet: {{ vehicle.vehicle_number }}</h3>
                                 <div class="overflow-x-auto mt-4">
-                                    <table class="table table-sm w-full">
+                                    <table class="table table-sm w-auto min-w-max">
                                         <thead>
                                             <tr>
                                                 <th>Product</th>
                                                 <th class="text-right">Total Quantity</th>
+                                                <th class="text-right">Returned</th>
+                                                <th class="text-right">Increased Demand</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -87,6 +100,8 @@
                                                     </span>
                                                 </td>
                                                 <td class="text-right font-bold">{{ item_data.total_quantity_decimal|floatformat:"2" }}</td>
+                                                <td class="text-right">{{ item_data.returned_quantity_decimal|floatformat:"2" }}</td>
+                                                <td class="text-right">{{ item_data.increased_demand_decimal|floatformat:"2" }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
