@@ -120,7 +120,7 @@
 
         <form method="post" id="addDetailForm" action="{% url 'stock:add_product_details' %}{% if search_query %}?q={{ search_query }}{% endif %}">
         {% csrf_token %}
-
+             <input type="hidden" name="performed_by_name" id="add_detail_performed_by_name">
         {% if form.non_field_errors %}
         <div role="alert" class="alert alert-error text-sm p-3 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5" fill="none" viewBox="0 0 24 24">
@@ -246,6 +246,7 @@
         <div class="modal-box">
             <form id="addStockForm" method="post" action=""> {# Action set by JS #}
                 {% csrf_token %}
+                   <input type="hidden" name="performed_by_name" id="add_stock_performed_by_name">
                 <h3 class="font-bold text-lg mb-4" id="addStockModalTitle">Add Stock to Product</h3>
                 
                 <div class="space-y-4">
@@ -490,6 +491,38 @@
             }
         });
     }
+
+
+
+     function handleFormSubmitWithPrompt(formElement, hiddenInputElement, promptMessage) {
+        if (!formElement || !hiddenInputElement) return;
+
+        formElement.addEventListener('submit', function(event) {
+            // Get the name from the user
+            const name = prompt(promptMessage, "");
+
+            // Check if the user clicked "Cancel" or entered an empty name
+            if (name === null || name.trim() === "") {
+                // Prevent the form from submitting
+                event.preventDefault(); 
+                alert("Operation cancelled. A name is required to proceed.");
+            } else {
+                // If a name was entered, set the value of the hidden input
+                hiddenInputElement.value = name.trim();
+                // The form will now submit as normal with the hidden field populated.
+            }
+        });
+    }
+
+     // --- Attach this logic to your forms ---
+    const addDetailForm = document.getElementById('addDetailForm');
+    const addDetailHiddenInput = document.getElementById('add_detail_performed_by_name');
+    handleFormSubmitWithPrompt(addDetailForm, addDetailHiddenInput, "Please enter your name to confirm adding this new product detail:");
+
+    const addStockFormJs = document.getElementById('addStockForm');
+    const addStockHiddenInput = document.getElementById('add_stock_performed_by_name');
+    handleFormSubmitWithPrompt(addStockFormJs, addStockHiddenInput, "Please enter your name to confirm adding this stock:");
+
 }); 
 </script>
 {% endblock %}

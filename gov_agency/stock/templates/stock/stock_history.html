@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Stock Activity Log{% endblock %}
+{% block page_title %}Stock Activity Log{% endblock %}
+
+{% block content %}
+<div class="p-4 md:p-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold text-base-content">Stock Activity</h1>
+            <p class="text-sm text-base-content/70">A complete history of all added stock and created stock.</p>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card bg-base-100 shadow-xl">
+        <div class="card-body p-0">
+            <div class="overflow-x-auto">
+                <table class="table w-full">
+                    <thead class="bg-base-200">
+                        <tr>
+                            <th class="p-4">Product</th>
+                            <th class="p-4 text-center">Action</th>
+                            <th class="p-4 text-right">Qty Change</th>
+                            <th class="p-4 text-right">Stock Before</th>
+                            <th class="p-4 text-right">Stock After</th>
+                            {% comment %} <th class="p-4">Notes</th> {% endcomment %}
+                            <th class="p-4">Performed By</th>
+                            <th class="p-4">Date & Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in history %}
+                        <tr class="hover">
+                            <td class="p-4">
+                                <div class="font-bold">{{ log.product_detail.product_base.name }}</div>
+                                <div class="text-xs text-base-content/70">
+                                    {{ log.product_detail.packing_type }}
+                                    (Exp: {{ log.product_detail.expirey_date|date:"d M Y" }})
+                                </div>
+                            </td>
+                            <td class="p-4 text-center">
+                                {% if log.action == 'ADD' %}
+                                    <span class="badge badge-success badge-outline">Stock Added</span>
+                                {% else %}
+                                    <span class="badge badge-success badge-outline">{{ log.get_action_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-4 text-right font-mono {% if log.quantity_change > 0 %}text-success{% else %}text-error{% endif %}">
+                                {% if log.quantity_change > 0 %}+{% endif %}{{ log.quantity_change|floatformat:"-2g" }}
+                            </td>
+                            <td class="p-4 text-right font-mono text-base-content/70">{{ log.stock_before|floatformat:"-2g" }}</td>
+                            <td class="p-4 text-right font-mono font-bold">{{ log.stock_after|floatformat:"-2g" }}</td>
+                            <td class="p-4">{{ log.performed_by|default:"System" }}</td>
+                            <td class="p-4 text-xs whitespace-nowrap">{{ log.timestamp|date:"d-m-Y g:i A" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="p-8 text-center text-base-content/60">
+                                <div class="flex flex-col items-center">
+                                    No stock activity has been recorded yet.
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

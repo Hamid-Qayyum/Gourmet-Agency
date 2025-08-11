@@ -6,7 +6,7 @@ from django.contrib.auth import login, logout
 from .utils import authenticate 
 from django.contrib.auth.models import User 
 from django.contrib.auth.decorators import login_required
-from .models import AddProduct, ProductDetail,Sale, Vehicle, Shop, SalesTransaction, SalesTransactionItem
+from .models import AddProduct, ProductDetail,Sale, Vehicle, Shop, SalesTransaction, SalesTransactionItem,StockHistory
 from accounts.models import ShopFinancialTransaction  # model from account app
 from claim.models import Claim
 from gov_agency.models import AdminProfile
@@ -139,6 +139,18 @@ def add_product_details(request):
             detail.user = request.user
             detail.save()
             messages.success(request, f"Details for '{detail.product_base.name}' added successfully!")
+            # creating history.........
+            performed_by_name = request.POST.get('performed_by_name', request.user.username)
+            StockHistory.objects.create(
+                product_detail=detail,
+                user=request.user,
+                performed_by=performed_by_name, 
+                action='CREATED',
+                quantity_change=detail.stock,
+                stock_before=0,
+                stock_after=detail.stock,
+                notes=f"New batch created with expiry {detail.expirey_date}"
+            )
             redirect_url = redirect('stock:add_product_details').url
             if query:
                 redirect_url += f'?q={query}'
@@ -232,12 +244,25 @@ def add_stock_to_product_detail_view(request, pk):
                 with transaction.atomic():
                     # Check if a batch with the exact same new expiry date already exists for this product
                     existing_batch =  ProductDetail.objects.select_for_update().get(pk=pk, user=request.user)
+                    stock_before = existing_batch.stock
                     if existing_batch:
                         # Add stock to the existing batch with the same expiry date
                         existing_batch.increase_stock(new_stock_quantity)   
                         existing_batch.expirey_date = new_expiry_date
                         existing_batch.save(update_fields=['stock', 'expirey_date', 'updated_at'])
                         messages.success(request, f"Added {new_stock_quantity} stock to existing batch of {existing_batch.product_base.name} (Exp: {new_expiry_date}). New stock: {existing_batch.stock}.")
+                        # creating history .......
+                        performed_by_name = request.POST.get('performed_by_name', request.user.username)
+                        StockHistory.objects.create(
+                        product_detail=existing_batch,
+                        user=request.user,
+                        performed_by=performed_by_name, 
+                        action='ADD',
+                        quantity_change=new_stock_quantity,
+                        stock_before=stock_before,
+                        stock_after=existing_batch.stock,
+                        notes=f"Expiry updated to {new_expiry_date}"
+                        )
                     else:
                         # Create a new ProductDetail instance for the new batch
                         new_batch = ProductDetail.objects.create(
@@ -266,6 +291,16 @@ def add_stock_to_product_detail_view(request, pk):
     # This view is for POST only from the modal
     return redirect('stock:add_product_details')
 
+@login_required
+@admin_mode_required
+def stock_history_view(request):
+    all_stock_history = StockHistory.objects.filter(user=request.user).order_by('-timestamp')
+    history = (StockHistory.objects.select_related(
+        'product_detail','product_detail__product_base','user')
+        .order_by('-timestamp')
+        .filter(user =request.user))
+    print(all_stock_history)
+    return render(request, 'stock/stock_history.html', {'history': history})
 
 #  sales views...................................................................................................................
 

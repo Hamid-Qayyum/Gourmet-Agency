@@ -20,6 +20,7 @@ urlpatterns = [
    path('sales/bulk_delete/', views.bulk_delete_sales_view, name='bulk_delete_sales'),
    path('product-details/update/<int:pk>/', views.product_detail_update_view, name='product_detail_update'),
    path('product-details/add-stock/<int:pk>/', views.add_stock_to_product_detail_view, name='add_stock_to_product_detail'),
+   path('stock_history', views.stock_history_view, name='product_detail_history'),
 
 
    #views about sales.................

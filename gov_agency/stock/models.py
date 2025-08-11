@@ -142,6 +142,35 @@ class ProductDetail(models.Model):
     
 
 
+class StockHistory(models.Model):
+    ACTION_CHOICES = [
+        ('ADD', 'Stock Added'),
+        ('CREATED', 'Product Created'),
+    ]
+
+    product_detail = models.ForeignKey(
+        'ProductDetail',
+        on_delete=models.CASCADE,
+        related_name='stock_history'
+    )
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    quantity_change = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    stock_before = models.DecimalField(max_digits=10, decimal_places=2,blank=True, null=True)
+    stock_after = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    performed_by = models.CharField(max_length=100, blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.get_action_display()} - {self.product_detail} ({self.timestamp:%Y-%m-%d %H:%M})"
+
+
 class SalesTransaction(models.Model):
     """
     Represents the header of a single sales transaction, which can contain multiple items.

@@ -170,7 +170,6 @@
                                 
                                 <!-- The Dropdown Menu Content -->
                                 <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
-                                    <!-- "Is Admin" Checkbox: Only shows for staff users and is disabled (informational) -->
                                         <li class="p-2">
                                             <label class="label cursor-pointer p-0">
                                                 <span class="label-text font-semibold">Admin Mode</span>
@@ -179,7 +178,12 @@
                                             </label>
                                         </li>
                                         <div class="divider my-0"></div>
-                                    
+                                        <li>
+                                            <a href="{% url 'stock:product_detail_history' %}" class="hover:bg-base-300">
+                                                Stock History
+                                            </a> 
+                                        </li>
+                                        <div class="divider my-0"></div>
                                     <!-- Logout Button -->
                                     <li><a href="{% url 'logout' %}" class="text-error font-semibold">Logout</a></li>
                                 </ul>
