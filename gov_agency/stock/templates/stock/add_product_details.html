@@ -60,11 +60,11 @@
                     <th>Qty</th>
                     <th>Items/Master</th>
                     <th>Price/Item</th>
-                    {% comment %} <th>Total Price of Packing</th> {% endcomment %}
+                    <th>Item S/P</th>
                     <th>Exp</th>
                     <th>Total Items</th>
                     <th>Stock</th>
-                    <th>Stock Total Price</th>
+                    <th>Stock T/P</th>
                 </tr>
             </thead>
             <tbody>
@@ -80,6 +80,7 @@
                     data-price-per-item="{{ detail.price_per_item|stringformat:'.2f' }}"
                     data-expirey-date="{{ detail.expirey_date|date:'m-d-y' }}" 
                     data-stock = "{{detail.stock}}"
+                    data-selling-price-of-item="{{ detail.selling_price_of_item|stringformat:'.2f' }}"
                     >
                     <td>
                         <label>
@@ -91,7 +92,7 @@
                     <td class="quantity-in-packing">{{ detail.quantity_in_packing|floatformat:2 }}&nbsp;{{ detail.unit_of_measure }}</td>
                     <td class="items-per-master-unit">{{ detail.items_per_master_unit }}</td>
                     <td class="price-per-item">Rs&nbsp;{{ detail.price_per_item|floatformat:2 }}</td>
-                    {% comment %} <td class=" font-semibold">Rs&nbsp;{{ detail.total_price_for_master_unit|floatformat:2 }}</td> {% endcomment %}
+                    <td class=" font-semibold">Rs&nbsp;{{ detail.selling_price_of_item| default_if_none:'0.00' | floatformat:2 }}</td>
                     <td class="text-red-500">{{detail.expirey_date}}</td>
                     <td>{{detail.total_items_in_stock}}</td>
                     <td>{{detail.stock}}</td>
@@ -205,6 +206,10 @@
                     <div class="form-control w-full">
                         <label class="label" for="update_stock"><span class="label-text">Stock</span></label>
                         <input type="number" name="stock" id="update_stock" step="0.01" class="input input-bordered w-full" required>
+                    </div>
+                     <div class="form-control w-full">
+                        <label class="label" for="update_selling_price_of_item"><span class="label-text">Stock Selling Price</span></label>
+                        <input type="number" name="selling_price_of_item" id="update_selling_price_of_item" step="0.00" class="input input-bordered w-full">
                     </div>
                     
                     <div class="form-control w-full md:col-span-2">
@@ -401,6 +406,7 @@
                         updateDetailModalForm.querySelector('#update_items_per_master_unit').value = selectedRow.dataset.itemsPerMasterUnit;
                         updateDetailModalForm.querySelector('#update_price_per_item').value = selectedRow.dataset.pricePerItem;
                         updateDetailModalForm.querySelector('#update_stock').value = selectedRow.dataset.stock;
+                        updateDetailModalForm.querySelector('#update_selling_price_of_item').value = selectedRow.dataset.sellingPriceOfItem;
 
 
                         const originalDate = selectedRow.dataset.expireyDate;

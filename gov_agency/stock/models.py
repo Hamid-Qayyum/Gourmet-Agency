@@ -42,7 +42,8 @@ class ProductDetail(models.Model):
 
     price_per_item = models.DecimalField(max_digits=10, decimal_places=2, null=False, blank=False, validators=[MinValueValidator(0.01)],
     help_text="Price for one individual item (e.g., one bottle, one piece).")
-
+    selling_price_of_item = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0.00)],
+    help_text="Selling Price of an Item")
     stock = models.DecimalField(max_digits=10,decimal_places=2  ,blank=False, null=False, validators=[MinValueValidator(0.01)],help_text="e.g. 100.00 for 100,")
     expirey_date = models.DateField(blank=False, null=False, default=date.today() + timedelta(days=30))
     created_at = models.DateTimeField(auto_now_add=True)

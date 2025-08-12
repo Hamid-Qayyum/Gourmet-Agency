@@ -266,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 addItemQuantityInput.value = '0.1';
                                 addItemQuantityInput.max = data.total_individual_items_available; // For individual items
                             }
+                             
                         } else { clearAddItemBatchDetailsUI(); console.error("AJAX AddItem Error:", result.error); }
                     })
                     .catch(error => { clearAddItemBatchDetailsUI(); console.error("Fetch AddItem Error:", error); });
@@ -355,6 +356,8 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    sellingPriceInput.value = data.data.selling_price_of_item || '';
+                    pricePerCartonInput.value = data.data.selling_price_of_item * data.data.items_per_master_unit || '';
                     callback(data.data.items_per_master_unit);
                 } else {
                     callback(0);

@@ -215,7 +215,7 @@ def product_detail_update_view(request, pk):
     instance  = get_object_or_404(ProductDetail, pk=pk, user=request.user)
     if request.method == 'POST':
         form = ProductDetailForm(request.POST, instance=instance , user=request.user)
-        if form.is_valid():
+        if form.is_valid(): 
             form.save()
             messages.success(request, f"Details for '{instance .product_base.name}' updated successfully!")
             query = request.GET.get('q_after_update', '')
@@ -525,6 +525,7 @@ def ajax_get_batch_details_for_sale(request, pk): # Renamed from get_sale_produc
             'cost_price_per_item': str(detail.price_per_item),
             'suggested_selling_price_per_item': str(round(detail.price_per_item * Decimal('1.20'), 2)), # 20% markup
             'items_per_master_unit': detail.items_per_master_unit,
+            'selling_price_of_item': str(detail.selling_price_of_item) if detail.selling_price_of_item else '',
         }
         return JsonResponse({'success': True, 'data': data})
     except ProductDetail.DoesNotExist:

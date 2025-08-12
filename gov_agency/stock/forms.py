@@ -86,6 +86,7 @@ class ProductDetailForm(forms.ModelForm):
             'unit_of_measure', 
             'items_per_master_unit', 
             'price_per_item', 
+            'selling_price_of_item',
             'stock',
             'expirey_date'
         ]
@@ -125,6 +126,10 @@ class ProductDetailForm(forms.ModelForm):
                 'class': 'input input-bordered w-full', 
                 'placeholder': '100.00'
             }),
+            'selling_price_of_item': forms.NumberInput(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': 'Selling Price of an Item',
+            }),
         }
         labels = {
             'product_base': 'Base Product Name',
@@ -152,10 +157,6 @@ class ProductDetailForm(forms.ModelForm):
         return price
     
     def clean_stock(self):
-        """
-        Validates the stock field based on the new 'MasterUnits.IndividualItems'
-        decimal format (2 decimal places).
-        """
         stock = self.cleaned_data.get('stock')
         items_per_master_unit = self.cleaned_data.get('items_per_master_unit')
         if stock and items_per_master_unit:
@@ -180,6 +181,10 @@ class ProductDetailForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        if cleaned_data.get('price_per_item') is not None and cleaned_data.get('selling_price_of_item') is not None:
+            if cleaned_data.get('price_per_item') >= cleaned_data.get('selling_price_of_item'):
+                self.add_error('selling_price_of_item', "Selling price must be greater than cost price.")
+
         if cleaned_data.get('some_field') == 'value' and cleaned_data.get('other_field') < 10:
             raise forms.ValidationError("Specific error based on multiple fields.")
         return cleaned_data
@@ -274,26 +279,7 @@ class AddItemToSaleForm(forms.Form):
             self.fields['product_detail_batch'].label_from_instance = lambda obj: f"{obj.product_base.name} {obj.quantity_in_packing} {obj.unit_of_measure} (Exp: {obj.expirey_date.strftime('%d-%b-%Y')}, Stock: {obj.stock})"
         self.fields['product_detail_batch'].empty_label = "--- Select Product Batch to Add ---"
 
-    # def clean_quantity_to_add(self):
-    #     quantity_decimal = self.cleaned_data.get('quantity_to_add')
-    #     product_detail = self.cleaned_data.get('product_detail_batch')
-
-    #     if product_detail and quantity_decimal:
-    #         # Convert input decimal to total items to sell
-    #         items_to_sell = product_detail._get_items_from_decimal(quantity_decimal)
-    #         if items_to_sell <= 0:
-    #             self.add_error('quantity_to_add', "Must specify a quantity to sell.")
-
-    #         # Validate loose items part of the input
-    #         loose_items_input = int((quantity_decimal % 1) * 100)
-    #         if loose_items_input >= product_detail.items_per_master_unit:
-    #              raise forms.ValidationError(f"Loose items part ({loose_items_input}) cannot exceed items per master unit ({product_detail.items_per_master_unit}).")
-
-    #         # Validate against total available stock
-    #         if items_to_sell > product_detail.total_items_in_stock:
-    #             self.add_error('quantity_to_add', f"Not enough stock. Available: {product_detail.total_items_in_stock} items.")
-        
-    #     return quantity_decimal
+    
     
     def clean(self):
         cleaned_data = super().clean()
