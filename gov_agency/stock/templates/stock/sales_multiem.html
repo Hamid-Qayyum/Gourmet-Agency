@@ -357,7 +357,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(data => {
                 if (data.success) {
                     sellingPriceInput.value = data.data.selling_price_of_item || '';
-                    pricePerCartonInput.value = data.data.selling_price_of_item * data.data.items_per_master_unit || '';
+                    pricePerCartonInput.value = parseFloat((data.data.selling_price_of_item * data.data.items_per_master_unit || '0').toFixed(2));
                     callback(data.data.items_per_master_unit);
                 } else {
                     callback(0);
