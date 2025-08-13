@@ -300,6 +300,12 @@
     const savedTheme = localStorage.getItem('preferredTheme');
     if (savedTheme) {
         document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'light'){
+             document.getElementById('themeToggleBtn').textContent = 'Dark Theme';
+        }
+        else{
+            document.getElementById('themeToggleBtn').textContent = 'Light Theme';
+        }
     }
 
     document.addEventListener('DOMContentLoaded', function() {

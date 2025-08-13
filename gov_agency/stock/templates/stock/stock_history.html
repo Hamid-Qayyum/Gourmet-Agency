@@ -35,7 +35,7 @@
                         {% for log in history %}
                         <tr class="hover">
                             <td class="p-4">
-                                <div class="font-bold">{{ log.product_detail.product_base.name }}</div>
+                                <div class="font-bold">{{ log.product_detail.product_base.name }} {{log.product_detail.quantity_in_packing}} {{log.product_detail.unit_of_measure}}</div>
                                 <div class="text-xs text-base-content/70">
                                     {{ log.product_detail.packing_type }}
                                     (Exp: {{ log.product_detail.expirey_date|date:"d M Y" }})

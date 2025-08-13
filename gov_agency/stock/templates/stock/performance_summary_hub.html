@@ -9,12 +9,12 @@
     <div class="flex justify-between items-center mb-6">
         <h1 class="text-2xl font-bold">Select a Group to View Performance</h1>
         <a href="{% url 'stock:sales_by_group_hub' %}"
-            class="relative inline-flex items-center uppercase tracking-widest text-black text-sm px-3 py-2 transition-transform duration-300 hover:scale-[1.02] active:scale-95 group">
+            class="sale_by_vehicle_for_color relative inline-flex items-center uppercase tracking-widest text-black text-sm px-3 py-2 transition-transform duration-300 hover:scale-[1.02] active:scale-95 group">
             Sales By Vehicles
             <span class="absolute top-[-12px] right-[-16px] text-xl group-hover:translate-x-1 transition-transform duration-300">
                 ⇝
             </span>
-            <span class="absolute bottom-0 left-0 w-full h-[2px] bg-black scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-bottom-right group-hover:origin-bottom-left"></span>
+            <span class="sale_by_vehicle_for_color_span absolute bottom-0 left-0 w-full h-[2px] bg-black scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-bottom-right group-hover:origin-bottom-left"></span>
         </a>    
         </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -36,4 +36,33 @@
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    document.addEventListener('DOMContentLoaded',() => {
+        const themeTooglebtn =  document.querySelector('#themeToggleBtn')
+        const sale_by_vehicle_for_color = document.querySelector('.sale_by_vehicle_for_color')
+        function set_sale_by_vehicle_color(){
+        const themeTooglebtn =  document.querySelector('#themeToggleBtn')
+        const sale_by_vehicle_for_color = document.querySelector('.sale_by_vehicle_for_color')
+        const sale_by_vehicle_for_color_span = document.querySelector('.sale_by_vehicle_for_color_span')
+        if (themeTooglebtn.textContent.toLowerCase().includes('light')){
+        sale_by_vehicle_for_color.classList.remove('text-black');
+        sale_by_vehicle_for_color_span.classList.remove('bg-black');
+        sale_by_vehicle_for_color.classList.add('text-white');
+        sale_by_vehicle_for_color_span.classList.add('bg-white');
+    }
+        else if (themeTooglebtn.textContent.toLowerCase().includes('dark')){
+        sale_by_vehicle_for_color.classList.add('text-black');   
+        sale_by_vehicle_for_color_span.classList.remove('bg-white'); 
+        sale_by_vehicle_for_color.classList.remove('text-white');
+        sale_by_vehicle_for_color_span.classList.add('bg-black');
+}
+        }
+        set_sale_by_vehicle_color()
+        themeTooglebtn.addEventListener('click',set_sale_by_vehicle_color)
+    });
+</script>
 {% endblock %}

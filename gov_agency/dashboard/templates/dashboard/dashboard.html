@@ -8,6 +8,13 @@
 {{ block.super }}
     <!-- Chart.js for data visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+         /* Dark mode */
+        [data-theme="dark"] .set_monthly_target_el {
+            color: #FFFFFF; /* Darker green */
+        }
+        
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -156,9 +163,9 @@
                     <div class="flex justify-between">
                         <h2 class="card-title">This Month's Sales Target</h2>
                         <label for="set_target_modal"
-                            class="relative inline-flex items-center uppercase tracking-widest text-black text-sm px-3 py-2 transition-transform duration-300 hover:scale-[1.02] active:scale-95 group cursor-pointer">
+                            class="set_monthly_target_el relative inline-flex items-center uppercase tracking-widest text-black text-sm px-3 py-2 transition-transform duration-300 hover:scale-[1.02] active:scale-95 group cursor-pointer">
                         Set Monthly Target
-                        <span class="absolute bottom-0 left-0 w-full h-[2px] bg-black scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-bottom-right group-hover:origin-bottom-left"></span>
+                        <span class="set_monthly_target_line_el absolute bottom-0 left-0 w-full h-[2px] bg-black scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-bottom-right group-hover:origin-bottom-left"></span>
                         </label>                    
                     </div>
                     <p class="text-sm">
@@ -256,6 +263,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.font = 'bold 24px sans-serif';
+            ctx.fillStyle = '#1ABC9C';
             ctx.fillText(text, x, y);
         }
     };
@@ -313,6 +321,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    themeToggleBtn.addEventListener('click',set_monthly_target_line_el_color)
+    function set_monthly_target_line_el_color(){
+    const themeTooglebtn =  document.querySelector('#themeToggleBtn')
+    if (themeTooglebtn.textContent.toLowerCase().includes('light')){
+    document.querySelector(".set_monthly_target_line_el").classList.remove('bg-black');
+    document.querySelector('.set_monthly_target_line_el').classList.add('bg-white');}
+    else if (themeTooglebtn.textContent.toLowerCase().includes('dark')){
+    document.querySelector('.set_monthly_target_line_el').classList.add('bg-black');    
+    document.querySelector('.set_monthly_target_line_el').classList.remove('bg-white');}
+    }
+    set_monthly_target_line_el_color()
 });
 </script>
 {% endblock %}
