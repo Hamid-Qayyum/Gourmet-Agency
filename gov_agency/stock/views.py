@@ -392,6 +392,12 @@ def sales_processing_view(request):
                         # 3. CREATE THE TRANSACTION INSTANCE (but don't save yet)
                         sales_transaction_header = form_to_validate.save(commit=False)
                         sales_transaction_header.user = request.user
+                        if sales_transaction_header.needs_vehicle and sales_transaction_header.assigned_vehicle:
+                            request.session['assigned_vehicle_id'] = sales_transaction_header.assigned_vehicle.id
+                            request.session['need_vehicle'] = True
+                        else:
+                            request.session.pop('assigned_vehicle_id', None)
+                            request.session.pop('need_vehicle', None)
                         sales_transaction_header.status = 'PENDING_DELIVERY' if sales_transaction_header.needs_vehicle else 'COMPLETED'
                         
                         # 4. HANDLE PAYMENT LOGIC (Single vs. Split)
@@ -469,7 +475,21 @@ def sales_processing_view(request):
     }
     return render(request, 'stock/sales_multiem.html', context)
 
+@login_required
+def get_last_assigned_vehicle(request):
+    """
+    Returns the last assigned vehicle from session if needs_vehicle is True.
+    """
+    need_vehicle = request.session.get('need_vehicle', False)
+    assigned_vehicle_id = request.session.get('assigned_vehicle_id')
 
+    if need_vehicle and assigned_vehicle_id:
+        return JsonResponse({
+            'success': True,
+            'vehicle_id': assigned_vehicle_id
+        })
+    else:
+        return JsonResponse({'success': False})
 
 
 @login_required

@@ -115,7 +115,7 @@ class ProductDetailForm(forms.ModelForm):
             'price_per_item': forms.NumberInput(attrs={
                 'class': 'input input-bordered w-full', 
                 'placeholder': 'e.g., 100.00',
-                'step': '0.1' 
+                'step': '0.01' 
             }),
             'expirey_date': forms.DateInput(attrs={
                 'type':'date',
@@ -129,6 +129,7 @@ class ProductDetailForm(forms.ModelForm):
             'selling_price_of_item': forms.NumberInput(attrs={
                 'class': 'input input-bordered w-full',
                 'placeholder': 'Selling Price of an Item',
+                'step': '0.01',
             }),
         }
         labels = {

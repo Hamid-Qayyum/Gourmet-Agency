@@ -19,7 +19,7 @@
     {% endblock %}
 
 {% block content %}
-   <div class="p-4 md:p-6" {% if not THEME_IS_SET_IN_BASE_HTML %}data-theme="light"{% endif %}> 
+   <div class="p-4 md:p-6"> 
      <!-- Top Action Bar: Search and Buttons -->
       <div class="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div id="global-action-buttons">
@@ -201,7 +201,7 @@
                     </div>
                     <div class="form-control w-full">
                         <label class="label" for="update_price_per_item"><span class="label-text">Price per Single Item/Pack</span></label>
-                        <input type="number" name="price_per_item" id="update_price_per_item" class="input input-bordered w-full" required>
+                        <input type="number" name="price_per_item" id="update_price_per_item" class="input input-bordered w-full" step="0.01" required>
                     </div>
                     <div class="form-control w-full">
                         <label class="label" for="update_stock"><span class="label-text">Stock</span></label>
@@ -209,7 +209,7 @@
                     </div>
                      <div class="form-control w-full">
                         <label class="label" for="update_selling_price_of_item"><span class="label-text">Stock Selling Price</span></label>
-                        <input type="number" name="selling_price_of_item" id="update_selling_price_of_item" step="0.00" class="input input-bordered w-full">
+                        <input type="number" name="selling_price_of_item" id="update_selling_price_of_item" step="0.01" class="input input-bordered w-full">
                     </div>
                     
                     <div class="form-control w-full md:col-span-2">

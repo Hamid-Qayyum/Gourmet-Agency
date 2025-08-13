@@ -23,6 +23,13 @@
         border: none !important;
         box-shadow: none !important;
         }
+        /* Dark mode */
+        [data-theme="dark"] .alert-success {
+            background-color: #1F472A; /* Darker green */
+        }
+        [data-theme="dark"] .alert-info {
+            background-color: #0C3C59; /* Darker blue */
+        }
     </style>
 </head>
 <body class="bg-base-200 font-sans">
@@ -106,12 +113,12 @@
                 </li>
            
                 <details class="mt-4 group">
-                <summary class="cursor-pointer flex items-center gap-2 text-black hover:bg-gray-100 px-2 py-1 rounded-md">
+                <summary class="cursor-pointer flex items-center gap-2  hover:bg-base-100 px-2 py-1 rounded-md">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
                     Stock
                 </summary>
 
-                <ul class="absolute bg-white">
+                <ul class="absolute bg-base-200">
                 <li>
                     <a href="{% url 'stock:create_product' %}" class="hover:bg-base-300 {% if request.resolver_match.url_name == 'add_products' %}active{% endif %}">
                          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -182,6 +189,12 @@
                                             <a href="{% url 'stock:product_detail_history' %}" class="hover:bg-base-300">
                                                 Stock History
                                             </a> 
+                                        </li>
+                                        <div class="divider my-0"></div>
+                                        <li>
+                                            <span id = "themeToggleBtn" class = "hover:bg-base-300">
+                                                Dark Theme
+                                            </span>
                                         </li>
                                         <div class="divider my-0"></div>
                                     <!-- Logout Button -->
@@ -268,7 +281,27 @@
             });
           }); {% endcomment %}
 
-          
+    document.getElementById('themeToggleBtn').addEventListener('click', function () {
+    const htmlTag = document.documentElement; // <html> element
+    const currentTheme = htmlTag.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    if (newTheme === 'light'){
+        document.getElementById('themeToggleBtn').textContent = 'Dark Theme';
+    }
+    else{
+        document.getElementById('themeToggleBtn').textContent = 'Light Theme';
+    }
+    htmlTag.setAttribute('data-theme', newTheme);
+
+    // Optional: Save preference in localStorage
+    localStorage.setItem('preferredTheme', newTheme);
+});
+// Apply saved theme on load
+    const savedTheme = localStorage.getItem('preferredTheme');
+    if (savedTheme) {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
     const messagesContainer = document.getElementById('django-messages-container');
      if (messagesContainer) {

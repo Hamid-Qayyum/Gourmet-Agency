@@ -455,6 +455,18 @@ if (discountInput) {
 
 // Initial state
 handlePaymentTypeChange();
+
+fetch("{% url 'stock:get_last_vehicle' %}",{
+    method:'GET',
+})
+.then(response => response.json())
+.then(data => {
+    if (data.success){
+        finalizeNeedsVehicleCheckbox.checked = true;
+        toggleFinalizeVehicleSection()
+        finalizeAssignedVehicleSelect.value = data.vehicle_id;
+    }
+})
 });
 </script>
 {% endblock %}
