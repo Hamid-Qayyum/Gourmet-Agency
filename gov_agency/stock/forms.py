@@ -322,7 +322,7 @@ class FinalizeSaleForm(forms.ModelForm): # CORRECTED: Inherits from ModelForm
     """Form for final details when completing a sale with multiple items."""
     # Your custom field definitions for widgets and querysets are still used, which is correct.
     customer_shop = forms.ModelChoiceField(
-        queryset=Shop.objects.none(), required=False, label="Select Registered Shop (Optional)",
+        queryset=Shop.objects.none(), required=False, label="Select Registered Shop",
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'})
     )
     customer_name_manual = forms.CharField(

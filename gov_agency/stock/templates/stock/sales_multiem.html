@@ -462,10 +462,24 @@ fetch("{% url 'stock:get_last_vehicle' %}",{
 .then(response => response.json())
 .then(data => {
     if (data.success){
+        if(sessionStorage.getItem("vehicle_value") && sessionStorage.getItem("vehicle_value") !== ""){
         finalizeNeedsVehicleCheckbox.checked = true;
         toggleFinalizeVehicleSection()
         finalizeAssignedVehicleSelect.value = data.vehicle_id;
+        }
     }
+})
+
+finalizeNeedsVehicleCheckbox.addEventListener('click',()=>{
+    if (!finalizeNeedsVehicleCheckbox.checked){
+        finalizeAssignedVehicleSelect.value = ""
+        sessionStorage.setItem("vehicle_value", "")
+        console.log('finalizeAssignedVehicleSelect value = ' , finalizeAssignedVehicleSelect.value)
+    } 
+    else{
+        sessionStorage.setItem("vehicle_value", 'checked')
+        console.log("checked")
+    }   
 })
 });
 </script>
