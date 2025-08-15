@@ -10,6 +10,10 @@
                     {{ edit_transaction_form.transaction_date }}
                 </div>
                 <div class="form-control w-full">
+                    <label id="transaction_type_label" class="label" for="id_transaction_type"><span class="label-text">{{ edit_transaction_form.transaction_type.label }}</span></label>
+                    {{ edit_transaction_form.transaction_type }}
+                </div>
+                <div class="form-control w-full">
                     <label class="label" for="id_debit_amount"><span class="label-text">{{ edit_transaction_form.debit_amount.label }}</span></label>
                     {{ edit_transaction_form.debit_amount }}
                     <div class="label"><span class="label-text-alt">{{ edit_transaction_form.debit_amount.help_text }}</span></div>

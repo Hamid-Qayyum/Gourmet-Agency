@@ -45,6 +45,7 @@
                     <th class="text-right">Debit Today</th>
                     <th class="text-right">Online Sales</th>
                     <th class="text-right">Cash Received</th>
+                    <th class="text-right">Online Cash</th>
                     <th class="text-right font-bold">Net Settlement</th>
                     <th class="text-right font-bold">Net Physical Cash</th>
                     <th class="text-center">Actions</th>
@@ -59,7 +60,7 @@
                     <td class="text-right text-orange-500">- Rs {{ summary.total_debit_today|floatformat:2|intcomma}}</td>
                     <td class="text-right text-purple-500">- Rs {{ summary.online_sales_today|floatformat:2|intcomma }}</td>
                     <td class="text-right text-cyan-500">+ Rs {{ summary.total_cash_received|floatformat:2|intcomma }}</td>
-                    
+                    <td class="text-right text-purple-500">+ Rs {{ summary.online_received_cash|floatformat:2|intcomma }}</td>
                     <td class="text-right font-bold text-lg {% if summary.net_total_settlement > 0 %}text-success{% else %}text-error{% endif %}">
                         Rs {{ summary.net_total_settlement|floatformat:2|intcomma }}
                     </td>

@@ -13,7 +13,7 @@ class ReceiveCashForm(forms.ModelForm):
     class Meta:
         model = ShopFinancialTransaction
         # The user will only see and fill out these two fields in the modal.
-        fields = ['credit_amount', 'notes'] 
+        fields = ['credit_amount', 'notes','transaction_type'] 
         
         widgets = {
             'credit_amount': forms.NumberInput(attrs={
@@ -27,15 +27,23 @@ class ReceiveCashForm(forms.ModelForm):
                 'placeholder': 'Optional notes (e.g., "Partial payment", "Invoice #123")',
                 'id': 'receive_cash_notes',
             }),
+            'transaction_type': forms.Select(attrs={
+                'class': 'input input-bordered w-full',
+                'placeholder': 'Select Payment Type',
+                'id': 'select_transaction_type',
+            }),
         }
         labels = {
             'credit_amount': 'Cash Amount Received',
             'notes': 'Notes / Reference',
+            'transaction_type':'Transaction Type',
         }
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # This overrides the model's default=0.00 for the purpose of rendering the empty form.
         self.fields['credit_amount'].initial = None
+        self.fields['transaction_type'].required = True
+        self.fields['transaction_type'].choices = [('', '--- Select Transaction Type ---'),  *[(k, v) for k, v in self.fields['transaction_type'].choices if k != '']]
 
     def clean_credit_amount(self):
         """Ensure the received amount is a positive number."""
@@ -62,17 +70,19 @@ class EditFinancialTransactionForm(forms.ModelForm):
     class Meta:
         model = ShopFinancialTransaction
         # These are the fields that could potentially be edited.
-        fields = ['transaction_date', 'debit_amount', 'credit_amount', 'notes']
+        fields = ['transaction_date', 'transaction_type', 'debit_amount', 'credit_amount', 'notes']
         widgets = {
             # Use a widget that supports both date and time if needed
-                'debit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01'}),
+            'debit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01'}),
             'credit_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01'}),
             'notes': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
+            'transaction_type' :  forms.Select(attrs={'class': 'input input-bordered w-full'}),
         }
         labels = {
             'debit_amount': 'Debit Amount (Owed by Shop)',
             'credit_amount': 'Credit Amount (Paid by Shop)',
-            'notes': 'Edit Reason / Notes'
+            'notes': 'Edit Reason / Notes',
+            'transaction_type': 'Edit Transaction Type',
         }
 
     def __init__(self, *args, **kwargs):
@@ -81,18 +91,15 @@ class EditFinancialTransactionForm(forms.ModelForm):
         # prevent editing the core financial amounts. Only notes can be changed.
         # This preserves the integrity of your sales records.
         if self.instance and self.instance.source_sale:
-            self.fields['debit_amount'].widget.attrs['readonly'] = True
-            self.fields['debit_amount'].widget.attrs['class'] += ' bg-base-200' # Visually indicate it's readonly
-            
-            self.fields['credit_amount'].widget.attrs['readonly'] = True
-            self.fields['credit_amount'].widget.attrs['class'] += ' bg-base-200'
-
-            self.fields['transaction_date'].widget.attrs['readonly'] = True
-            self.fields['transaction_date'].widget.attrs['class'] += ' bg-base-200'
-
-            # Add a help text to explain why it's read-only
-            self.fields['debit_amount'].help_text = "This amount is linked to a sale and cannot be changed here. To correct it, you must process a return for that sale."
-
+            for field in ['debit_amount', 'credit_amount', 'transaction_date']:
+                self.fields[field].widget.attrs['readonly'] = True
+                self.fields[field].widget.attrs['class'] += ' bg-base-200'
+        else:  
+            self.fields['transaction_type'].choices = [
+            ('', '--- Select Transaction Type ---'),
+            *[(k, v) for k, v in self.fields['transaction_type'].choices if k != '']
+            ]
+     
 
 
 

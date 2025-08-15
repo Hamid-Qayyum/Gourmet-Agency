@@ -184,19 +184,31 @@ document.addEventListener('DOMContentLoaded', function() {
                         const debitInput = editTxForm.querySelector('#id_debit_amount');
                         const creditInput = editTxForm.querySelector('#id_credit_amount');
                         const notesInput = editTxForm.querySelector('#id_notes');
+                        const transaction_type = editTxForm.querySelector('#id_transaction_type');
 
                         // Populate the form fields
                         if(dateInput) dateInput.value = data.transaction_date;
                         if(debitInput) debitInput.value = data.debit_amount;
                         if(creditInput) creditInput.value = data.credit_amount;
                         if(notesInput) notesInput.value = data.notes;
+                        if(transaction_type) transaction_type.value = data.transaction_type;
 
                         // If the transaction is from a sale, make amount/date fields readonly
                         if (data.is_from_sale) {
                             if(debitInput) { debitInput.readOnly = true; debitInput.classList.add('bg-base-200'); }
                             if(creditInput) { creditInput.readOnly = true; creditInput.classList.add('bg-base-200'); }
                             if(dateInput) { dateInput.readOnly = true; dateInput.classList.add('bg-base-200'); }
-                        }
+                            if(transaction_type){
+                                transaction_type.style.display = 'none';
+                                document.getElementById("transaction_type_label").style.display = 'none';
+                                }
+                            }
+                            else{
+                                if(transaction_type){
+                                transaction_type.style.display =  'block';
+                                document.getElementById("transaction_type_label").style.display = 'block';
+                                }
+                            }
                     } else {
                         alert(`Error: ${result.error || 'Could not load transaction data.'}`);
                         if (editTxModalCheckbox) editTxModalCheckbox.checked = false;

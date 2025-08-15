@@ -10,6 +10,11 @@
                 {{ receive_cash_form.credit_amount }}
                 {% if receive_cash_form.credit_amount.errors %}...{% endif %}
             </div>
+            <div class="form-control w-full mb-4">
+                <label class="label" for="{{ receive_cash_form.transaction_type.id_for_label }}"><span class="label-text">{{ receive_cash_form.transaction_type.label }}</span></label>
+                {{ receive_cash_form.transaction_type }}
+                {% if receive_cash_form.transaction_type.errors %}...{% endif %}
+            </div>
             <div class="form-control w-full">
                 <label class="label" for="{{ receive_cash_form.notes.id_for_label }}"><span class="label-text">{{ receive_cash_form.notes.label }}</span></label>
                 {{ receive_cash_form.notes }}

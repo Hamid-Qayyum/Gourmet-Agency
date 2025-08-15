@@ -15,8 +15,8 @@ class ShopFinancialTransaction(models.Model):
     TRANSACTION_TYPE_CHOICES = [
         ('CREDIT_SALE', 'Credit from Sale'),
         ('CASH_RECEIPT', 'Cash Receipt'),
-        ('OPENING_BALANCE', 'Opening Balance'),
-        ('MANUAL_ADJUSTMENT', 'Manual Adjustment'),
+        ('ONLINE', 'Online Payment'),
+        ('OPENING_BALANCE', 'Opening Balance'),     
     ]
 
     # Links to the Shop model in your 'stock' app
@@ -175,7 +175,7 @@ class DailySummary(models.Model):
     
     # 1. Physical cash in hand
     net_physical_cash = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Net for physical cash only: (CASH Sales + Credit Payments) - Expenses.")
-    
+    online_received_cash = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     # 2. Total settlement including bank/online transactions
     net_total_settlement = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'), help_text="Net including online: (CASH+ONLINE Sales + Credit Payments) - Expenses.")
     created_at = models.DateTimeField(auto_now_add=True)
