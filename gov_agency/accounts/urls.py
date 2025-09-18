@@ -14,7 +14,7 @@ urlpatterns = [
     path('financial-transaction/edit/<int:transaction_pk>/', views.edit_financial_transaction_view, name='edit_financial_transaction'),
     path('financial-transaction/delete/<int:transaction_pk>/', views.delete_financial_transaction_view, name='delete_financial_transaction'),
     path('financial-transaction/ajax/get-data/<int:transaction_pk>/', views.ajax_get_financial_transaction_data, name='ajax_get_financial_transaction_data'),
-    
+    path("shops/<int:shop_id>/calc-balance/", views.calc_balance_view, name="calc_balance"),
 
     path('custom/', views.custom_account_hub_view, name='custom_account_hub'),
     path('custom/update/<int:account_pk>/', views.update_custom_account_card_view, name='update_custom_account'),

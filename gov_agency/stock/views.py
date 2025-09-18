@@ -292,7 +292,7 @@ def add_stock_to_product_detail_view(request, pk):
     return redirect('stock:add_product_details')
 
 @login_required
-@admin_mode_required
+# @admin_mode_required
 def stock_history_view(request):
     all_stock_history = StockHistory.objects.filter(user=request.user).order_by('-timestamp')
     history = (StockHistory.objects.select_related(
@@ -627,6 +627,7 @@ def confirm_reverse_sale(request, sale_id):
                 # 1. Restore Stock
                 for item in sale.items.select_related("product_detail_snapshot"):
                     item.product_detail_snapshot.increase_stock(item.quantity_sold_decimal)
+                    item.product_detail_snapshot.decrease_stock(item.returned_quantity_decimal)
 
                 # 2. Delete Ledger Entry if it was CREDIT
                 if sale.payment_type == 'CREDIT' or sale.payment_type == 'SPLIT':
@@ -954,14 +955,10 @@ def process_delivery_return_view(request, sale_pk):
                         product_detail = item_instance.product_detail_snapshot
 
                         # Process returned quantity change
-                        if form_item.has_changed() and 'returned_quantity_decimal' in form_item.changed_data:
-                            original_returned = item_instance.returned_quantity_decimal
-                            new_returned = form_item.cleaned_data['returned_quantity_decimal']
-                            stock_diff = new_returned - original_returned
-                            if stock_diff > 0:
-                                product_detail.increase_stock(stock_diff)
-                            elif stock_diff < 0:
-                                product_detail.decrease_stock(abs(stock_diff))
+                        new_returned =  form_item.cleaned_data.get('returned_quantity_decimal') or Decimal('0.00')
+                        if new_returned:
+                            new_returned = product_detail._get_items_from_decimal(new_returned)
+                            product_detail.increase_stock(product_detail._get_decimal_from_items(new_returned))
 
                         # Process increased demand
                         increased_demand = form_item.cleaned_data.get('increased_demand') or Decimal('0.00')

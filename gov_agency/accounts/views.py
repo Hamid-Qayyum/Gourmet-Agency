@@ -19,6 +19,7 @@ from gov_agency.decorators import admin_mode_required # Import the custom decora
 from stock.models import Vehicle, Shop, SalesTransaction
 from .models import ShopFinancialTransaction
 from .forms import ReceiveCashForm, EditFinancialTransactionForm # Import the new forms
+from .utils import recalc_shop_balances
 
 
 @login_required
@@ -166,6 +167,12 @@ def shop_ledger_view(request, shop_pk):
         'edit_transaction_form': EditFinancialTransactionForm(),
     }
     return render(request, 'accounts/shop_ledger.html', context)
+
+def calc_balance_view(request, shop_id):
+    shop = get_object_or_404(Shop, pk=shop_id)
+    final_balance = recalc_shop_balances(shop_id)
+    messages.success(request, f"Balances recalculated for {shop.name}. Final balance = {final_balance}")
+    return redirect("accounts:shop_ledger", shop_pk=shop_id)
 
 
 @login_required

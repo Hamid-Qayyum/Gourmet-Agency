@@ -58,8 +58,8 @@ def dashboard_view(request):
     
     all_shops = Shop.objects.filter(user=user)
     all_custom_accounts = CustomAccount.objects.filter(user=user)
-    total_shop_balance = sum(shop.current_balance for shop in all_shops)
-    total_custom_balance = sum(account.current_balance for account in all_custom_accounts)
+    total_shop_balance = sum(shop.current_balance for shop in all_shops if shop.current_balance > 0)
+    total_custom_balance = sum(account.current_balance for account in all_custom_accounts if account.current_balance > 0)
     total_receivables = total_shop_balance + total_custom_balance
     
     pending_claims_count = Claim.objects.filter(user=user, status='AWAITING_PROCESSING').count()

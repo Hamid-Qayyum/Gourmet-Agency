@@ -55,7 +55,10 @@
                     <h1 class="text-2xl font-bold">Financial Ledger: {{ shop.name }}</h1>
                     <p class="text-sm text-base-content/70">{{ shop.location_address|default:"" }} | {{ shop.contact_phone|default:"No phone" }}</p>
                 </div>
+                <div>
+                <a href="{% url 'accounts:calc_balance' shop.id %}" class="btn btn-warning">Calc Balance</a>
                 <a href="{% url 'accounts:transactions_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0 non-printable">← Back to Hub</a>
+                </div>
             </div>
     
             <!-- Summary Stats -->
@@ -86,28 +89,32 @@
             <table class="table table-sm w-full">
                 <thead>
                     <tr>
+                        <th>Invoice No</th>
                         <th>Date</th>
                         <th>Transaction Type</th>
-                        <th>Notes / Source</th>
+                        <th>Narration</th>
                         <th class="debit-col">Debit (Owed)</th>
                         <th class="credit-col">Credit (Paid)</th>
+                        <th class="balance-col">Balance</th>
                         <th class="text-center non-printable">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for entry in ledger_entries %}
                     <tr>
-                        <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"d-m-Y H:i" }}</td>
+                        <th><span class="text-xs">{{ entry.id }}</span></th>
+                        <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"d-m-Y" }}</td>
                         <td><span class="badge badge-sm badge-ghost">{{ entry.get_transaction_type_display }}</span></td>
                         <td class="text-xs">
                             {% if entry.source_sale %}
                                 <a href="{% url 'stock:sale_receipt' sale_pk=entry.source_sale.pk %}" target="_blank" class="link link-hover text-primary">From Sale #{{ entry.source_sale.pk }}</a>
                             {% else %}
-                                {{ entry.notes|default:""|truncatechars:40 }}
+                                {{ entry.notes|default:"" }}
                             {% endif %}
                         </td>
                         <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
                         <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>
+                        <td class= balance-col> Rs {{entry.balance|floatformat:2|intcomma }} </td>
                         <td class="text-center space-x-1 non-printable">
                             <button type="button" class="btn btn-xs btn-outline btn-info open-edit-tx-modal-btn" data-tx-pk="{{ entry.pk }}">
                                 Edit

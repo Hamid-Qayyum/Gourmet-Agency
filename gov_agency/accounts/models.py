@@ -65,6 +65,7 @@ class ShopFinancialTransaction(models.Model):
         max_digits=12, decimal_places=2, default=Decimal('0.00'),
         help_text="Amount the shop paid you (e.g., cash received)."
     )
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     
     notes = models.CharField(max_length=255, blank=True, null=True)
     transaction_date = models.DateTimeField(default=timezone.now)
@@ -76,7 +77,26 @@ class ShopFinancialTransaction(models.Model):
         return self.customer_name_snapshot or "Unknown Customer"
 
     def __str__(self):
-        return f"{self.get_transaction_type_display()} for {self.get_customer_display_name} on {self.transaction_date.strftime('%Y-%m-%d')}"
+        return f"{self.get_transaction_type_display()} for {self.get_customer_display_name()} on {self.transaction_date.strftime('%Y-%m-%d')} customer name is {self.customer_name_snapshot}"
+    
+    def save(self, *args, **kwargs):
+        # Get the latest previous balance for this shop or manual customer
+        if self.shop:
+            last_transaction = ShopFinancialTransaction.objects.filter(
+                shop=self.shop
+            ).exclude(pk=self.pk).order_by("-transaction_date", "-pk").first()
+        else:
+            last_transaction = ShopFinancialTransaction.objects.filter(
+                shop__isnull=True,
+                customer_name_snapshot=self.customer_name_snapshot
+            ).exclude(pk=self.pk).order_by("-transaction_date", "-pk").first()
+
+        previous_balance = last_transaction.balance if last_transaction else Decimal("0.00")
+
+        # Calculate new balance
+        self.balance = previous_balance + self.debit_amount - self.credit_amount
+
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-transaction_date', '-pk'] # Order by most recent first

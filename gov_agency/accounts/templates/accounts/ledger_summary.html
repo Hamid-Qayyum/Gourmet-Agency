@@ -95,6 +95,7 @@
             {% if manual_customers %}
                  <div id="customersContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
                     {% for customer in manual_customers %}
+                    {% if customer.customer_name_snapshot and customer.customer_name_snapshot != "" %}
                     <a href="{% url 'accounts:manual_customer_ledger'  customer_name=customer.customer_name_snapshot %}" 
                        class="customer-item p-4 bg-base-200 rounded-lg hover:bg-base-300 transition-all flex flex-col justify-between"
                        data-name="{{ customer.customer_name_snapshot|lower }}">
@@ -108,6 +109,7 @@
                             </span>
                         </div>
                     </a>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 <div id="noCustomersMessage" class="hidden">
