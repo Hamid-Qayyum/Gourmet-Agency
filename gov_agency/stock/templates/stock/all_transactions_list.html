@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load humanize %}
-
+{% load custom_tags %}
 {% block title %}All Sales Transactions{% endblock %}
 {% block page_title %}Sales Transaction History{% endblock %}
 
@@ -89,7 +89,11 @@
                         {{ tx.get_status_display }}
                         {{ tx.assigned_vehicle.vehicle_number|default:'' }}
                     ">
-                        <td>{{ tx.pk }}</td>
+                        <td>
+                            <span class="badge badge-sm {% if tx|has_lower_price %}badge-error{% elif tx|has_higher_price %}badge-success{% endif %}">
+                                {{ tx.pk }}
+                            </span>
+                        </td>
                         <td class="text-xs whitespace-nowrap">{{ tx.transaction_time|date:"d-m-Y" }}</td>
                         <td>{{ tx.customer_shop.name|default:tx.customer_name_manual|default:"N/A"|truncatechars:25 }}</td>
                         <td class="text-xs">
