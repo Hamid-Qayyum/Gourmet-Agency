@@ -19,7 +19,7 @@ from gov_agency.decorators import admin_mode_required # Import the custom decora
 from stock.models import Vehicle, Shop, SalesTransaction
 from .models import ShopFinancialTransaction
 from .forms import ReceiveCashForm, EditFinancialTransactionForm # Import the new forms
-from .utils import recalc_shop_balances
+from .utils import recalc_shop_balances,recalc_custom_account_balances
 
 
 @login_required
@@ -348,7 +348,7 @@ def custom_account_ledger_view(request, account_pk):
             messages.error(request, "Error adding entry. Please check the form.")
     
     add_entry_form = CustomTransactionEntryForm()
-    ledger_entries = account.transactions.all().order_by('-transaction_date')
+    ledger_entries = account.transactions.all().order_by('-transaction_date', '-pk')
     
     context = {
         'account': account,
@@ -359,6 +359,11 @@ def custom_account_ledger_view(request, account_pk):
     }
     return render(request, 'accounts/custom_account_ledger.html', context)
 
+def calc_account_balance_view(request, account_id):
+    account = get_object_or_404(CustomAccount, pk=account_id)
+    final_balance = recalc_custom_account_balances(account_id)
+    messages.success(request, f"Balances recalculated for {account.name}. Final balance = {final_balance}")
+    return redirect("accounts:custom_account_ledger", account_pk=account_id)
 
 @login_required
 @admin_mode_required

@@ -1,6 +1,7 @@
 # utils.py (in your app)
 from decimal import Decimal
 from .models import ShopFinancialTransaction
+from .models import CustomAccountTransaction
 
 def recalc_shop_balances(shop_id):
     qs = (
@@ -16,5 +17,22 @@ def recalc_shop_balances(shop_id):
         balance = balance + debit - credit
         tx.balance = balance
         ShopFinancialTransaction.objects.filter(pk=tx.pk).update(balance=balance)
-        print(f'[{tx.id}] debit={debit} credit={credit} new_balance={balance}')  # debug
+        # print(f'[{tx.id}] debit={debit} credit={credit} new_balance={balance}')
+    return balance
+
+
+def recalc_custom_account_balances(account_id):
+    qs = (
+        CustomAccountTransaction.objects
+        .filter(account_id=account_id)
+        .order_by("transaction_date", "pk")  # ascending order
+    )
+
+    balance = Decimal("0.00")
+    for tx in qs:
+        debit = tx.debit_amount or Decimal("0.00")
+        credit = tx.credit_amount or Decimal("0.00")
+        balance = balance + debit - credit
+        CustomAccountTransaction.objects.filter(pk=tx.pk).update(balance=balance)
+        # print(f"[{tx.pk}] debit={debit} credit={credit} balance={balance}")
     return balance

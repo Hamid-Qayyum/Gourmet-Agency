@@ -35,7 +35,10 @@
                 <p class="text-sm text-base-content/70">{{ account.phone_number|default:"No phone number" }}</p>
             </div>
             <!-- This button will be hidden on print -->
+            <div>
+                <a href="{% url 'accounts:calc_account_balance' account.id %}" class="btn btn-warning">Calc Balance</a>
             <a href="{% url 'accounts:custom_account_hub' %}" class="btn btn-sm btn-outline mt-2 sm:mt-0 non-printable">← Back to Hub</a>
+            </div>
         </div>
 
         <!-- Summary Stats -->
@@ -70,20 +73,24 @@
         <table class="table table-sm w-full">
             <thead>
                 <tr>
+                    <th>Invoce No</th>
                     <th>Date</th>
-                    <th>Notes</th>
+                    <th>Narration</th>
                     <th class="debit-col">Debit (+)</th>
                     <th class="credit-col">Credit (-)</th>
+                    <th class="balance-col">Balance</th>
                     <th class="text-center non-printable">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for entry in ledger_entries %}
                 <tr>
-                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"d-m-Y (h:i:A)" }}</td>
+                    <td class="text-xs">{{ entry.id }}</td>
+                    <td class="text-xs whitespace-nowrap">{{ entry.transaction_date|date:"d-m-Y" }}</td>
                     <td class="text-xs">{{ entry.notes|default:""|truncatechars:50 }}</td>
                     <td class="debit-col">{% if entry.debit_amount > 0 %}Rs {{ entry.debit_amount|floatformat:2|intcomma }}{% endif %}</td>
                     <td class="credit-col">{% if entry.credit_amount > 0 %}Rs {{ entry.credit_amount|floatformat:2|intcomma }}{% endif %}</td>
+                    <td class="balance-col">Rs {{ entry.balance|floatformat:2|intcomma }}</td>
                     <td class="text-center space-x-1 non-printable">
                         <button type="button" class="btn btn-xs btn-outline btn-info open-edit-tx-modal-btn" data-tx-pk="{{ entry.pk }}">Edit</button>
                         <button type="button" class="btn btn-xs btn-outline btn-error open-delete-tx-modal-btn" data-tx-pk="{{ entry.pk }}" data-tx-info="Entry of Rs {{entry.debit_amount|add:entry.credit_amount}}">Delete</button>

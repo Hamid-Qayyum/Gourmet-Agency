@@ -164,6 +164,7 @@ class CustomAccountTransaction(models.Model):
         max_digits=12, decimal_places=2, default=Decimal('0.00'),
         help_text="Amount paid BY you or received FROM this entity (decreases their balance)."
     )
+    balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0.00'))
     notes = models.CharField(max_length=255, blank=True, null=True)
     transaction_date = models.DateTimeField(default=timezone.now)
     store_in_daily_summery = models.BooleanField(default=False)
@@ -171,8 +172,23 @@ class CustomAccountTransaction(models.Model):
     def __str__(self):
         return f"Transaction for {self.account.name} on {self.transaction_date.strftime('%Y-%m-%d')}"
 
+    def save(self, *args, **kwargs):
+        # Get the latest previous balance for this account (excluding current if updating)
+        last_transaction = (
+            CustomAccountTransaction.objects
+            .filter(account=self.account)
+            .exclude(pk=self.pk)
+            .order_by("-transaction_date", "-pk")
+            .first()
+        )
+        previous_balance = last_transaction.balance if last_transaction else Decimal("0.00")
+        # Calculate new balance
+        self.balance = previous_balance + self.debit_amount - self.credit_amount
+        super().save(*args, **kwargs)
+
+
     class Meta:
-        ordering = ['-transaction_date', '-pk']
+        ordering = ['transaction_date', 'pk']
         verbose_name = "Custom Account Transaction"
         verbose_name_plural = "Custom Account Transactions"
 
